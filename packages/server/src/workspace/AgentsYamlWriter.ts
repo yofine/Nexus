@@ -33,9 +33,12 @@ export class AgentsYamlWriter {
     const nexusDir = path.join(this.projectDir, '.nexus')
     fs.mkdirSync(nexusDir, { recursive: true })
 
+    // Filter out the bottom shell pane
+    const visible = panes.filter((p) => p.agent !== '__shell__')
+
     const data = {
       updated_at: new Date().toISOString(),
-      panes: panes.map((p) => ({
+      panes: visible.map((p) => ({
         id: p.id,
         name: p.name,
         agent: p.agent,

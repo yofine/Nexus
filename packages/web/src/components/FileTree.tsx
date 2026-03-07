@@ -97,10 +97,18 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths
 export function FileTree() {
   const { fileTree, tabs, activeTabId, openFileTab } = useWorkspaceStore()
   const [expanded, setExpanded] = useState<Set<string>>(() => {
+    // Auto-expand two levels deep
     const initial = new Set<string>()
     for (const node of fileTree) {
       if (node.type === 'directory') {
         initial.add(node.path)
+        if (node.children) {
+          for (const child of node.children) {
+            if (child.type === 'directory') {
+              initial.add(child.path)
+            }
+          }
+        }
       }
     }
     return initial

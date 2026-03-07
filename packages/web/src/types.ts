@@ -2,7 +2,7 @@
 
 export type PaneStatus = 'running' | 'waiting' | 'idle' | 'stopped' | 'error'
 export type RestoreMode = 'continue' | 'restart' | 'manual'
-export type AgentType = 'claudecode' | 'opencode' | 'kimi-cli' | 'qwencode'
+export type AgentType = 'claudecode' | 'opencode' | 'kimi-cli' | 'qwencode' | '__shell__'
 
 export interface PaneMeta {
   model?: string

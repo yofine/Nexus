@@ -1,11 +1,29 @@
+import path from 'node:path'
+import fs from 'node:fs'
 import { startServer } from './index.ts'
 
 const DEFAULT_PORT = 7700
 
+function findProjectRoot(startDir: string): string {
+  let dir = startDir
+  while (dir !== path.dirname(dir)) {
+    // Look for markers that indicate the project root
+    if (
+      fs.existsSync(path.join(dir, '.nexus')) ||
+      fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')) ||
+      fs.existsSync(path.join(dir, '.git'))
+    ) {
+      return dir
+    }
+    dir = path.dirname(dir)
+  }
+  return startDir
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const command = args[0] || 'start'
-  const projectDir = process.cwd()
+  const projectDir = process.env.NEXUS_PROJECT_DIR || findProjectRoot(process.cwd())
 
   switch (command) {
     case 'start':

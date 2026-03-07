@@ -98,8 +98,8 @@ export class PtyManager {
       }
     })
 
-    // After shell initializes, send the agent command
-    if (agentDef) {
+    // After shell initializes, send the agent command (skip for plain shell)
+    if (agentDef && config.agent !== '__shell__') {
       setTimeout(() => {
         this.sendAgentCommand(paneId, config, agentDef)
       }, 800)

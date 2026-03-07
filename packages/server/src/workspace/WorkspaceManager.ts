@@ -78,14 +78,18 @@ export class WorkspaceManager {
   }
 
   createPane(createConfig: PaneCreateConfig): PaneState {
-    const id = nextPaneId()
+    const isShell = createConfig.agent === '__shell__'
+    const id = isShell ? '__shell__' : nextPaneId()
     const config: PaneConfig = {
       id,
       ...createConfig,
     }
 
     const pane = this.spawnPane(config)
-    this.persistPaneConfig(config)
+    // Don't persist the bottom shell pane to workspace config
+    if (!isShell) {
+      this.persistPaneConfig(config)
+    }
     return pane
   }
 

@@ -4,6 +4,7 @@ import { AgentPane } from './AgentPane'
 import { AddPaneDialog } from './AddPaneDialog'
 import { FileTree } from './FileTree'
 import { EditorTabs } from './EditorTabs'
+import { BottomTerminal } from './BottomTerminal'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ClientEvent } from '@/types'
 import { Monitor, FolderTree } from 'lucide-react'
@@ -27,7 +28,7 @@ export function Layout({ send }: LayoutProps) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '48px 1fr 1fr 240px',
+        gridTemplateColumns: '48px minmax(320px, 1fr) minmax(400px, 2fr) 240px',
         height: '100vh',
         width: '100vw',
         overflow: 'hidden',
@@ -182,6 +183,9 @@ export function Layout({ send }: LayoutProps) {
         onClose={() => setShowAddDialog(false)}
         send={send}
       />
+
+      {/* Bottom Terminal */}
+      <BottomTerminal send={send} />
     </div>
   )
 }

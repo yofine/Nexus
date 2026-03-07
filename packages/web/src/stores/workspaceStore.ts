@@ -54,21 +54,27 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   activeTabId: null,
 
   setWorkspace: (name, description, projectDir, panes) =>
-    set((state) => ({
-      name,
-      description,
-      projectDir,
-      panes,
-      activePaneId: state.activePaneId || (panes.length > 0 ? panes[0].id : null),
-    })),
+    set((state) => {
+      const visible = panes.filter((p) => p.agent !== '__shell__')
+      return {
+        name,
+        description,
+        projectDir,
+        panes: visible,
+        activePaneId: state.activePaneId || (visible.length > 0 ? visible[0].id : null),
+      }
+    }),
 
-  setPanes: (panes) => set({ panes }),
+  setPanes: (panes) => set({ panes: panes.filter((p) => p.agent !== '__shell__') }),
 
   addPane: (pane) =>
-    set((state) => ({
-      panes: [...state.panes, pane],
-      activePaneId: pane.id,
-    })),
+    set((state) => {
+      if (pane.agent === '__shell__') return state
+      return {
+        panes: [...state.panes, pane],
+        activePaneId: pane.id,
+      }
+    }),
 
   removePane: (paneId) =>
     set((state) => ({
