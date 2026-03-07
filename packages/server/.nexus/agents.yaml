@@ -1,0 +1,16 @@
+updated_at: '2026-03-07T18:12:27.110Z'
+panes:
+  - id: pane-1
+    name: test
+    agent: opencode
+    pid: 966795
+    status: running
+    workdir: /root/workspace/Nexus/packages/server
+    started_at: '2026-03-07T18:12:08.122Z'
+  - id: pane-2
+    name: sdfd
+    agent: opencode
+    pid: 966870
+    status: running
+    workdir: /root/workspace/Nexus/packages/server
+    started_at: '2026-03-07T18:12:26.610Z'

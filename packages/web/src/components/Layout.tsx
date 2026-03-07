@@ -3,18 +3,17 @@ import { Sidebar } from './Sidebar'
 import { AgentPane } from './AgentPane'
 import { AddPaneDialog } from './AddPaneDialog'
 import { FileTree } from './FileTree'
-import { FileViewer } from './FileViewer'
-import { GitDiffPanel } from './GitDiffPanel'
+import { EditorTabs } from './EditorTabs'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ClientEvent } from '@/types'
-import { Monitor, GitBranch, FolderTree } from 'lucide-react'
+import { Monitor, FolderTree } from 'lucide-react'
 
 interface LayoutProps {
   send: (event: ClientEvent) => void
 }
 
 export function Layout({ send }: LayoutProps) {
-  const { panes, activePaneId, setActivePaneId, name, connectionStatus, selectedFile } = useWorkspaceStore()
+  const { panes, activePaneId, setActivePaneId, name, connectionStatus } = useWorkspaceStore()
   const [showAddDialog, setShowAddDialog] = useState(false)
 
   const handleTogglePane = useCallback(
@@ -28,7 +27,7 @@ export function Layout({ send }: LayoutProps) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '48px 1fr 300px 240px',
+        gridTemplateColumns: '48px 1fr 1fr 240px',
         height: '100vh',
         width: '100vw',
         overflow: 'hidden',
@@ -37,7 +36,7 @@ export function Layout({ send }: LayoutProps) {
       {/* Column 1: Sidebar */}
       <Sidebar onAddPane={() => setShowAddDialog(true)} />
 
-      {/* Column 2: Agent Accordion Area */}
+      {/* Column 2: Agent Panes */}
       <div
         style={{
           display: 'flex',
@@ -135,37 +134,20 @@ export function Layout({ send }: LayoutProps) {
         </div>
       </div>
 
-      {/* Column 3: Diff & Code Review */}
+      {/* Column 3: Editor Tabs (Diff Review + File Viewer) */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           borderRight: '1px solid var(--border-subtle)',
           height: '100vh',
+          overflow: 'hidden',
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            borderBottom: '1px solid var(--border-subtle)',
-            background: 'var(--bg-surface)',
-            flexShrink: 0,
-          }}
-        >
-          <GitBranch size={14} color="var(--text-secondary)" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-            Diff & Review
-          </span>
-        </div>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <GitDiffPanel send={send} />
-        </div>
+        <EditorTabs send={send} />
       </div>
 
-      {/* Column 4: Files */}
+      {/* Column 4: File Tree */}
       <div
         style={{
           display: 'flex',
@@ -189,12 +171,8 @@ export function Layout({ send }: LayoutProps) {
             Files
           </span>
         </div>
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {selectedFile ? (
-            <FileViewer />
-          ) : (
-            <FileTree />
-          )}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <FileTree />
         </div>
       </div>
 

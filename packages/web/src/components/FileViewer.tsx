@@ -1,23 +1,19 @@
 import { useState, useEffect } from 'react'
-import { X, File } from 'lucide-react'
-import { useWorkspaceStore } from '@/stores/workspaceStore'
 
-export function FileViewer() {
-  const { selectedFile, setSelectedFile } = useWorkspaceStore()
+interface FileViewerProps {
+  filePath: string
+}
+
+export function FileViewer({ filePath }: FileViewerProps) {
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!selectedFile) {
-      setContent(null)
-      return
-    }
-
     setLoading(true)
     setError(null)
 
-    fetch(`/api/file?path=${encodeURIComponent(selectedFile)}`)
+    fetch(`/api/file?path=${encodeURIComponent(filePath)}`)
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load file')
         return res.json()
@@ -31,64 +27,31 @@ export function FileViewer() {
       .finally(() => {
         setLoading(false)
       })
-  }, [selectedFile])
-
-  if (!selectedFile) return null
-
-  const fileName = selectedFile.split('/').pop() || selectedFile
+  }, [filePath])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* File header */}
+      {/* Path bar */}
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
+          padding: '4px 12px',
+          fontSize: 11,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text-muted)',
+          background: 'var(--bg-surface)',
           borderBottom: '1px solid var(--border-subtle)',
-          background: 'var(--bg-elevated)',
           flexShrink: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
+        title={filePath}
       >
-        <File size={12} color="var(--text-muted)" />
-        <span
-          style={{
-            fontSize: 12,
-            fontFamily: 'var(--font-mono)',
-            color: 'var(--text-primary)',
-            flex: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={selectedFile}
-        >
-          {fileName}
-        </span>
-        <button
-          onClick={() => setSelectedFile(null)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 2,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <X size={12} color="var(--text-muted)" />
-        </button>
+        {filePath}
       </div>
 
       {/* Content */}
-      <div
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          background: 'var(--bg-base)',
-        }}
-      >
+      <div style={{ flex: 1, overflow: 'auto', background: 'var(--bg-base)' }}>
         {loading && (
           <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>
             Loading...
@@ -110,17 +73,10 @@ export function FileViewer() {
               fontSize: 12,
               lineHeight: 1.5,
               color: 'var(--text-code)',
-              counterReset: 'line',
             }}
           >
             {content.split('\n').map((line, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  padding: '0 12px',
-                }}
-              >
+              <div key={i} style={{ display: 'flex', padding: '0 12px' }}>
                 <span
                   style={{
                     width: 40,

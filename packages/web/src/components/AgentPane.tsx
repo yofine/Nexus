@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, KeyboardEvent } from 'react'
+import { useCallback } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -25,9 +25,6 @@ const statusColors: Record<string, string> = {
 }
 
 export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
-  const [promptText, setPromptText] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
   const handleTerminalData = useCallback(
     (data: string) => {
       send({ type: 'terminal.input', paneId: pane.id, data })
@@ -41,20 +38,6 @@ export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
     },
     [pane.id, send],
   )
-
-  const handleSendPrompt = () => {
-    if (!promptText.trim()) return
-    send({ type: 'terminal.input', paneId: pane.id, data: promptText + '\n' })
-    setPromptText('')
-    inputRef.current?.focus()
-  }
-
-  const handlePromptKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendPrompt()
-    }
-  }
 
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -188,63 +171,14 @@ export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
         </div>
       </div>
 
-      {/* Expanded Body */}
+      {/* Expanded Body — terminal fills the entire area, user types directly in it */}
       {isActive && (
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          {/* Terminal */}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <Terminal
-              paneId={pane.id}
-              onData={handleTerminalData}
-              onResize={handleTerminalResize}
-            />
-          </div>
-
-          {/* Prompt Input */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              padding: '6px 12px',
-              borderTop: '1px solid var(--border-subtle)',
-              background: 'var(--bg-surface)',
-            }}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              onKeyDown={handlePromptKeyDown}
-              placeholder="Type a message..."
-              style={{
-                flex: 1,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 4,
-                padding: '6px 10px',
-                color: 'var(--text-primary)',
-                fontSize: 13,
-                fontFamily: 'var(--font-mono)',
-                outline: 'none',
-              }}
-            />
-            <button
-              onClick={handleSendPrompt}
-              style={{
-                background: 'var(--accent-primary)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 4,
-                padding: '6px 16px',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 500,
-              }}
-            >
-              Send
-            </button>
-          </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <Terminal
+            paneId={pane.id}
+            onData={handleTerminalData}
+            onResize={handleTerminalResize}
+          />
         </div>
       )}
     </div>

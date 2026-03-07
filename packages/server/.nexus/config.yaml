@@ -4,4 +4,12 @@ description: ''
 repository:
   path: .
   git: false
-panes: []
+panes:
+  - id: pane-1
+    name: test
+    agent: opencode
+    restore: continue
+  - id: pane-2
+    name: sdfd
+    agent: opencode
+    restore: continue

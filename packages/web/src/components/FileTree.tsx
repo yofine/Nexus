@@ -9,12 +9,14 @@ interface FileTreeNodeProps {
   expanded: Set<string>
   onToggle: (path: string) => void
   onSelect: (path: string) => void
-  selectedFile: string | null
+  openFilePaths: Set<string>
+  activeFilePath: string | undefined
 }
 
-function FileTreeNode({ node, depth, expanded, onToggle, onSelect, selectedFile }: FileTreeNodeProps) {
+function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths, activeFilePath }: FileTreeNodeProps) {
   const isExpanded = expanded.has(node.path)
-  const isSelected = selectedFile === node.path
+  const isActive = activeFilePath === node.path
+  const isOpen = openFilePaths.has(node.path)
   const isDir = node.type === 'directory'
 
   const handleClick = () => {
@@ -38,8 +40,8 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, selectedFile 
           cursor: 'pointer',
           fontSize: 12,
           fontFamily: 'var(--font-mono)',
-          color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-          background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+          color: isActive ? 'var(--text-primary)' : isOpen ? 'var(--accent-primary)' : 'var(--text-secondary)',
+          background: isActive ? 'var(--accent-subtle)' : 'transparent',
           borderRadius: 3,
           userSelect: 'none',
           whiteSpace: 'nowrap',
@@ -47,10 +49,10 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, selectedFile 
           textOverflow: 'ellipsis',
         }}
         onMouseEnter={(e) => {
-          if (!isSelected) e.currentTarget.style.background = 'var(--bg-overlay)'
+          if (!isActive) e.currentTarget.style.background = 'var(--bg-overlay)'
         }}
         onMouseLeave={(e) => {
-          if (!isSelected) e.currentTarget.style.background = 'transparent'
+          if (!isActive) e.currentTarget.style.background = 'transparent'
         }}
       >
         {isDir ? (
@@ -70,7 +72,7 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, selectedFile 
             <Folder size={14} color="var(--accent-primary)" style={{ flexShrink: 0 }} />
           )
         ) : (
-          <File size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+          <File size={14} color={isOpen ? 'var(--accent-primary)' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
         )}
 
         <span>{node.name}</span>
@@ -84,7 +86,8 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, selectedFile 
           expanded={expanded}
           onToggle={onToggle}
           onSelect={onSelect}
-          selectedFile={selectedFile}
+          openFilePaths={openFilePaths}
+          activeFilePath={activeFilePath}
         />
       ))}
     </>
@@ -92,9 +95,8 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, selectedFile 
 }
 
 export function FileTree() {
-  const { fileTree, selectedFile, setSelectedFile } = useWorkspaceStore()
+  const { fileTree, tabs, activeTabId, openFileTab } = useWorkspaceStore()
   const [expanded, setExpanded] = useState<Set<string>>(() => {
-    // Auto-expand top-level directories
     const initial = new Set<string>()
     for (const node of fileTree) {
       if (node.type === 'directory') {
@@ -103,6 +105,13 @@ export function FileTree() {
     }
     return initial
   })
+
+  // Derive which files have open tabs and which is active
+  const openFilePaths = new Set(
+    tabs.filter((t) => t.type === 'file' && t.filePath).map((t) => t.filePath!)
+  )
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+  const activeFilePath = activeTab?.type === 'file' ? activeTab.filePath : undefined
 
   const handleToggle = useCallback((path: string) => {
     setExpanded((prev) => {
@@ -117,8 +126,8 @@ export function FileTree() {
   }, [])
 
   const handleSelect = useCallback((path: string) => {
-    setSelectedFile(path)
-  }, [setSelectedFile])
+    openFileTab(path)
+  }, [openFileTab])
 
   if (fileTree.length === 0) {
     return (
@@ -147,7 +156,8 @@ export function FileTree() {
           expanded={expanded}
           onToggle={handleToggle}
           onSelect={handleSelect}
-          selectedFile={selectedFile}
+          openFilePaths={openFilePaths}
+          activeFilePath={activeFilePath}
         />
       ))}
     </div>

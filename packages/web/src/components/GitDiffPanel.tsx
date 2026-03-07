@@ -7,6 +7,7 @@ import {
   FileEdit,
   FileMinus,
   FileSymlink,
+  ExternalLink,
 } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ClientEvent, FileDiff } from '@/types'
@@ -81,7 +82,13 @@ function DiffHunks({ hunks }: { hunks: string }) {
 
 function DiffFileItem({ diff }: { diff: FileDiff }) {
   const [expanded, setExpanded] = useState(false)
+  const { openFileTab } = useWorkspaceStore()
   const Icon = statusIcons[diff.status] || FileEdit
+
+  const handleOpenFile = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    openFileTab(diff.file)
+  }
 
   return (
     <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -121,12 +128,35 @@ function DiffFileItem({ diff }: { diff: FileDiff }) {
         >
           {diff.file}
         </span>
+        <button
+          onClick={handleOpenFile}
+          title="Open file"
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 2,
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--bg-elevated)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'none'
+          }}
+        >
+          <ExternalLink size={11} color="var(--text-muted)" />
+        </button>
         <span
           style={{
             fontSize: 10,
             color: statusColors[diff.status],
             textTransform: 'uppercase',
             fontWeight: 600,
+            flexShrink: 0,
           }}
         >
           {diff.status[0]}

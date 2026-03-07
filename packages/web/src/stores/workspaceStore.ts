@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff } from '@/types'
 
+export interface EditorTab {
+  id: string
+  type: 'file' | 'diff'
+  label: string
+  filePath?: string
+}
+
 interface WorkspaceStore {
   name: string
   description: string
@@ -9,10 +16,13 @@ interface WorkspaceStore {
   activePaneId: string | null
   connectionStatus: 'connected' | 'disconnected' | 'reconnecting'
 
-  // P1: File tree and git diff state
+  // File tree and git diff
   fileTree: FileNode[]
   gitDiffs: FileDiff[]
-  selectedFile: string | null
+
+  // Tab system
+  tabs: EditorTab[]
+  activeTabId: string | null
 
   // Actions
   setWorkspace: (name: string, description: string, projectDir: string, panes: PaneState[]) => void
@@ -25,7 +35,10 @@ interface WorkspaceStore {
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting') => void
   setFileTree: (tree: FileNode[]) => void
   setGitDiffs: (diffs: FileDiff[]) => void
-  setSelectedFile: (path: string | null) => void
+  openFileTab: (path: string) => void
+  openDiffTab: () => void
+  closeTab: (tabId: string) => void
+  setActiveTab: (tabId: string) => void
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
@@ -37,7 +50,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   connectionStatus: 'disconnected',
   fileTree: [],
   gitDiffs: [],
-  selectedFile: null,
+  tabs: [],
+  activeTabId: null,
 
   setWorkspace: (name, description, projectDir, panes) =>
     set((state) => ({
@@ -86,5 +100,43 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   setGitDiffs: (gitDiffs) => set({ gitDiffs }),
 
-  setSelectedFile: (selectedFile) => set({ selectedFile }),
+  openFileTab: (path) =>
+    set((state) => {
+      const existing = state.tabs.find((t) => t.type === 'file' && t.filePath === path)
+      if (existing) {
+        return { activeTabId: existing.id }
+      }
+      const label = path.split('/').pop() || path
+      const tab: EditorTab = { id: `file:${path}`, type: 'file', label, filePath: path }
+      return { tabs: [...state.tabs, tab], activeTabId: tab.id }
+    }),
+
+  openDiffTab: () =>
+    set((state) => {
+      const existing = state.tabs.find((t) => t.type === 'diff')
+      if (existing) {
+        return { activeTabId: existing.id }
+      }
+      const tab: EditorTab = { id: 'diff', type: 'diff', label: 'Review' }
+      return { tabs: [...state.tabs, tab], activeTabId: tab.id }
+    }),
+
+  closeTab: (tabId) =>
+    set((state) => {
+      const idx = state.tabs.findIndex((t) => t.id === tabId)
+      const next = state.tabs.filter((t) => t.id !== tabId)
+      let nextActive = state.activeTabId
+      if (state.activeTabId === tabId) {
+        if (next.length === 0) {
+          nextActive = null
+        } else if (idx >= next.length) {
+          nextActive = next[next.length - 1].id
+        } else {
+          nextActive = next[idx].id
+        }
+      }
+      return { tabs: next, activeTabId: nextActive }
+    }),
+
+  setActiveTab: (tabId) => set({ activeTabId: tabId }),
 }))
