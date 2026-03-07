@@ -1,0 +1,76 @@
+import { startServer } from './index.ts'
+
+const DEFAULT_PORT = 7700
+
+async function main() {
+  const args = process.argv.slice(2)
+  const command = args[0] || 'start'
+  const projectDir = process.cwd()
+
+  switch (command) {
+    case 'start':
+    case undefined: {
+      const port = parseInt(process.env.NEXUS_PORT || String(DEFAULT_PORT), 10)
+      await startServer(port, projectDir)
+
+      // Open browser (lazy import to keep startup fast)
+      try {
+        const open = await import('open')
+        await open.default(`http://localhost:${port}`)
+      } catch {
+        console.log(`Open http://localhost:${port} in your browser`)
+      }
+      break
+    }
+
+    case 'init': {
+      const { ConfigManager } = await import('./workspace/ConfigManager.ts')
+      const configManager = new ConfigManager(projectDir)
+      configManager.loadGlobalConfig()
+      configManager.initWorkspace()
+      console.log(`Initialized .nexus/ in ${projectDir}`)
+      break
+    }
+
+    case 'status': {
+      const { ConfigManager } = await import('./workspace/ConfigManager.ts')
+      const configManager = new ConfigManager(projectDir)
+      const wsConfig = configManager.loadWorkspaceConfig()
+      if (!wsConfig) {
+        console.log('No .nexus/config.yaml found. Run `nexus init` first.')
+        break
+      }
+      console.log(`Workspace: ${wsConfig.name}`)
+      console.log(`Panes: ${wsConfig.panes.length}`)
+      for (const pane of wsConfig.panes) {
+        console.log(`  - ${pane.id} [${pane.agent}] ${pane.name}${pane.task ? ` — ${pane.task}` : ''}`)
+      }
+      break
+    }
+
+    case 'stop': {
+      // Send shutdown signal to running server
+      try {
+        const port = parseInt(process.env.NEXUS_PORT || String(DEFAULT_PORT), 10)
+        const res = await fetch(`http://localhost:${port}/api/health`)
+        if (res.ok) {
+          console.log('Sending shutdown signal...')
+          process.kill(process.pid, 'SIGTERM')
+        }
+      } catch {
+        console.log('No running Nexus server found.')
+      }
+      break
+    }
+
+    default:
+      console.log(`Unknown command: ${command}`)
+      console.log('Usage: nexus [start|init|status|stop]')
+      process.exit(1)
+  }
+}
+
+main().catch((err) => {
+  console.error('Fatal error:', err)
+  process.exit(1)
+})

@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+@theme {
+  --font-ui: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+}
+
+/* ── Dark IDE (Default) ── */
+:root,
+[data-theme="dark-ide"] {
+  --bg-base:        #0d0d0d;
+  --bg-surface:     #161616;
+  --bg-elevated:    #1e1e1e;
+  --bg-overlay:     #252525;
+
+  --border-subtle:  #2a2a2a;
+  --border-default: #3a3a3a;
+
+  --text-primary:   #e8e8e8;
+  --text-secondary: #888888;
+  --text-muted:     #555555;
+  --text-code:      #d4d4d4;
+
+  --accent-primary: #7c6af7;
+  --accent-hover:   #9580ff;
+  --accent-subtle:  #7c6af71a;
+
+  --status-running: #3fb950;
+  --status-waiting: #d29922;
+  --status-idle:    #555555;
+  --status-error:   #f85149;
+
+  --diff-added-bg:      #0d2a1a;
+  --diff-added-gutter:  #0a2015;
+  --diff-removed-bg:    #2a0d0d;
+  --diff-removed-gutter:#200a0a;
+  --diff-word-added:    #1a4d2a;
+  --diff-word-removed:  #4d1a1a;
+
+  --term-bg:        #000000;
+  --term-fg:        #cccccc;
+  --term-cursor:    #7c6af7;
+  --term-selection: #7c6af740;
+
+  --font-size-ui:   13px;
+  --font-size-mono: 13px;
+}
+
+/* ── GitHub Dark ── */
+[data-theme="github-dark"] {
+  --bg-base:        #0d1117;
+  --bg-surface:     #010409;
+  --bg-elevated:    #161b22;
+  --bg-overlay:     #1c2128;
+  --border-subtle:  #21262d;
+  --border-default: #30363d;
+  --text-primary:   #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted:     #484f58;
+  --text-code:      #e6edf3;
+  --accent-primary: #58a6ff;
+  --accent-hover:   #79c0ff;
+  --accent-subtle:  #58a6ff1a;
+  --status-running: #3fb950;
+  --status-waiting: #d29922;
+  --status-idle:    #484f58;
+  --status-error:   #f85149;
+  --term-bg:        #0d1117;
+  --term-fg:        #e6edf3;
+  --term-cursor:    #58a6ff;
+  --term-selection: #58a6ff40;
+}
+
+/* ── Dracula ── */
+[data-theme="dracula"] {
+  --bg-base:        #282a36;
+  --bg-surface:     #21222c;
+  --bg-elevated:    #2d2f3f;
+  --bg-overlay:     #343746;
+  --border-subtle:  #44475a;
+  --border-default: #6272a4;
+  --text-primary:   #f8f8f2;
+  --text-secondary: #6272a4;
+  --text-muted:     #44475a;
+  --text-code:      #f8f8f2;
+  --accent-primary: #bd93f9;
+  --accent-hover:   #caa9fa;
+  --accent-subtle:  #bd93f91a;
+  --status-running: #50fa7b;
+  --status-waiting: #f1fa8c;
+  --status-idle:    #44475a;
+  --status-error:   #ff5555;
+  --term-bg:        #1e1f29;
+  --term-fg:        #f8f8f2;
+  --term-cursor:    #f1fa8c;
+  --term-selection: #bd93f940;
+}
+
+/* ── Tokyo Night ── */
+[data-theme="tokyo-night"] {
+  --bg-base:        #1a1b26;
+  --bg-surface:     #16161e;
+  --bg-elevated:    #1f2335;
+  --bg-overlay:     #24283b;
+  --border-subtle:  #292e42;
+  --border-default: #3b4261;
+  --text-primary:   #c0caf5;
+  --text-secondary: #565f89;
+  --text-muted:     #3b4261;
+  --text-code:      #a9b1d6;
+  --accent-primary: #7aa2f7;
+  --accent-hover:   #89b4fa;
+  --accent-subtle:  #7aa2f71a;
+  --status-running: #9ece6a;
+  --status-waiting: #e0af68;
+  --status-idle:    #3b4261;
+  --status-error:   #f7768e;
+  --term-bg:        #13131d;
+  --term-fg:        #a9b1d6;
+  --term-cursor:    #7aa2f7;
+  --term-selection: #7aa2f740;
+}
+
+/* ── Catppuccin Mocha ── */
+[data-theme="catppuccin"] {
+  --bg-base:        #1e1e2e;
+  --bg-surface:     #181825;
+  --bg-elevated:    #313244;
+  --bg-overlay:     #45475a;
+  --border-subtle:  #313244;
+  --border-default: #45475a;
+  --text-primary:   #cdd6f4;
+  --text-secondary: #a6adc8;
+  --text-muted:     #585b70;
+  --text-code:      #cdd6f4;
+  --accent-primary: #cba6f7;
+  --accent-hover:   #d4bfff;
+  --accent-subtle:  #cba6f71a;
+  --status-running: #a6e3a1;
+  --status-waiting: #f9e2af;
+  --status-idle:    #585b70;
+  --status-error:   #f38ba8;
+  --term-bg:        #11111b;
+  --term-fg:        #cdd6f4;
+  --term-cursor:    #f5e0dc;
+  --term-selection: #cba6f740;
+}
+
+/* ── Nord ── */
+[data-theme="nord"] {
+  --bg-base:        #2e3440;
+  --bg-surface:     #272c36;
+  --bg-elevated:    #3b4252;
+  --bg-overlay:     #434c5e;
+  --border-subtle:  #3b4252;
+  --border-default: #4c566a;
+  --text-primary:   #eceff4;
+  --text-secondary: #d8dee9;
+  --text-muted:     #4c566a;
+  --text-code:      #e5e9f0;
+  --accent-primary: #88c0d0;
+  --accent-hover:   #8fbcbb;
+  --accent-subtle:  #88c0d01a;
+  --status-running: #a3be8c;
+  --status-waiting: #ebcb8b;
+  --status-idle:    #4c566a;
+  --status-error:   #bf616a;
+  --term-bg:        #242933;
+  --term-fg:        #d8dee9;
+  --term-cursor:    #88c0d0;
+  --term-selection: #88c0d040;
+}
+
+/* ── Light IDE ── */
+[data-theme="light-ide"] {
+  --bg-base:        #ffffff;
+  --bg-surface:     #f5f5f5;
+  --bg-elevated:    #ebebeb;
+  --bg-overlay:     #e0e0e0;
+  --border-subtle:  #e0e0e0;
+  --border-default: #cccccc;
+  --text-primary:   #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted:     #999999;
+  --text-code:      #1a1a1a;
+  --accent-primary: #6b57e8;
+  --accent-hover:   #7c6af7;
+  --accent-subtle:  #6b57e81a;
+  --status-running: #1a7f37;
+  --status-waiting: #9a6700;
+  --status-idle:    #999999;
+  --status-error:   #cf222e;
+  --term-bg:        #1e1e1e;
+  --term-fg:        #cccccc;
+  --term-cursor:    #6b57e8;
+  --term-selection: #6b57e840;
+}
+
+/* ── Base styles ── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
