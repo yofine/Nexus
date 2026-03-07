@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PaneState, PaneMeta, PaneStatus } from '@/types'
+import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff } from '@/types'
 
 interface WorkspaceStore {
   name: string
@@ -8,6 +8,11 @@ interface WorkspaceStore {
   panes: PaneState[]
   activePaneId: string | null
   connectionStatus: 'connected' | 'disconnected' | 'reconnecting'
+
+  // P1: File tree and git diff state
+  fileTree: FileNode[]
+  gitDiffs: FileDiff[]
+  selectedFile: string | null
 
   // Actions
   setWorkspace: (name: string, description: string, projectDir: string, panes: PaneState[]) => void
@@ -18,6 +23,9 @@ interface WorkspaceStore {
   updatePaneMeta: (paneId: string, meta: PaneMeta) => void
   setActivePaneId: (paneId: string | null) => void
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting') => void
+  setFileTree: (tree: FileNode[]) => void
+  setGitDiffs: (diffs: FileDiff[]) => void
+  setSelectedFile: (path: string | null) => void
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
@@ -27,6 +35,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   panes: [],
   activePaneId: null,
   connectionStatus: 'disconnected',
+  fileTree: [],
+  gitDiffs: [],
+  selectedFile: null,
 
   setWorkspace: (name, description, projectDir, panes) =>
     set((state) => ({
@@ -70,4 +81,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   setActivePaneId: (paneId) => set({ activePaneId: paneId }),
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+
+  setFileTree: (fileTree) => set({ fileTree }),
+
+  setGitDiffs: (gitDiffs) => set({ gitDiffs }),
+
+  setSelectedFile: (selectedFile) => set({ selectedFile }),
 }))

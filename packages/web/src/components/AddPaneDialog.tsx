@@ -9,7 +9,7 @@ interface AddPaneDialogProps {
 
 export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
   const [name, setName] = useState('')
-  const [agent] = useState<AgentType>('claudecode')
+  const [agent, setAgent] = useState<AgentType>('claudecode')
   const [workdir, setWorkdir] = useState('')
   const [task, setTask] = useState('')
   const [restore, setRestore] = useState<RestoreMode>('continue')
@@ -90,19 +90,17 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
             />
           </div>
 
-          {/* Agent Type (fixed to claudecode in P0) */}
+          {/* Agent Type */}
           <div>
             <label style={labelStyle}>Agent</label>
-            <div
-              style={{
-                ...inputStyle,
-                display: 'flex',
-                alignItems: 'center',
-                color: 'var(--text-secondary)',
-              }}
+            <select
+              value={agent}
+              onChange={(e) => setAgent(e.target.value as AgentType)}
+              style={inputStyle}
             >
-              claudecode
-            </div>
+              <option value="claudecode">Claude Code</option>
+              <option value="opencode">OpenCode</option>
+            </select>
           </div>
 
           {/* Working Directory */}

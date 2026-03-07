@@ -6,6 +6,8 @@ import type {
   RestoreMode,
   PaneStatus,
   PaneMeta,
+  FileNode,
+  FileDiff,
 } from '../types.ts'
 import { PtyManager } from '../pty/PtyManager.ts'
 import { ConfigManager } from './ConfigManager.ts'
@@ -16,6 +18,18 @@ function nextPaneId(): string {
   return `pane-${++paneCounter}`
 }
 
+export interface EventHandlers {
+  onPaneAdded?: (pane: PaneState) => void
+  onPaneRemoved?: (paneId: string) => void
+  onPaneStatus?: (paneId: string, status: PaneStatus) => void
+  onPaneMeta?: (paneId: string, meta: PaneMeta) => void
+  onTerminalData?: (paneId: string, data: string) => void
+  onFileTree?: (tree: FileNode[]) => void
+  onGitDiff?: (diffs: FileDiff[]) => void
+}
+
+type ListenerKey = keyof EventHandlers
+
 export class WorkspaceManager {
   private panes = new Map<string, PaneState>()
   private ptyManager: PtyManager
@@ -23,12 +37,16 @@ export class WorkspaceManager {
   private wsName = ''
   private wsDescription = ''
 
-  // Event callbacks for broadcasting to WS clients
-  private onPaneAdded?: (pane: PaneState) => void
-  private onPaneRemoved?: (paneId: string) => void
-  private onPaneStatus?: (paneId: string, status: PaneStatus) => void
-  private onPaneMeta?: (paneId: string, meta: PaneMeta) => void
-  private onTerminalData?: (paneId: string, data: string) => void
+  // Multi-client event listener sets
+  private listeners: { [K in ListenerKey]: Set<NonNullable<EventHandlers[K]>> } = {
+    onPaneAdded: new Set(),
+    onPaneRemoved: new Set(),
+    onPaneStatus: new Set(),
+    onPaneMeta: new Set(),
+    onTerminalData: new Set(),
+    onFileTree: new Set(),
+    onGitDiff: new Set(),
+  }
 
   constructor(configManager: ConfigManager) {
     this.configManager = configManager
@@ -55,6 +73,10 @@ export class WorkspaceManager {
     }
   }
 
+  getPanes(): PaneState[] {
+    return Array.from(this.panes.values())
+  }
+
   createPane(createConfig: PaneCreateConfig): PaneState {
     const id = nextPaneId()
     const config: PaneConfig = {
@@ -63,17 +85,14 @@ export class WorkspaceManager {
     }
 
     const pane = this.spawnPane(config)
-
-    // Persist to workspace config
     this.persistPaneConfig(config)
-
     return pane
   }
 
   closePane(paneId: string): void {
     this.ptyManager.kill(paneId)
     this.panes.delete(paneId)
-    this.onPaneRemoved?.(paneId)
+    this.emit('onPaneRemoved', paneId)
     this.removePaneFromConfig(paneId)
   }
 
@@ -103,23 +122,48 @@ export class WorkspaceManager {
     this.ptyManager.resize(paneId, cols, rows)
   }
 
-  // ─── Event Registration ───────────────────────────────────
+  // ─── Event Registration (multi-client safe) ────────────────
 
-  onEvents(handlers: {
-    onPaneAdded?: (pane: PaneState) => void
-    onPaneRemoved?: (paneId: string) => void
-    onPaneStatus?: (paneId: string, status: PaneStatus) => void
-    onPaneMeta?: (paneId: string, meta: PaneMeta) => void
-    onTerminalData?: (paneId: string, data: string) => void
-  }): void {
-    this.onPaneAdded = handlers.onPaneAdded
-    this.onPaneRemoved = handlers.onPaneRemoved
-    this.onPaneStatus = handlers.onPaneStatus
-    this.onPaneMeta = handlers.onPaneMeta
-    this.onTerminalData = handlers.onTerminalData
+  /**
+   * Register event handlers for a client. Returns a cleanup function
+   * that removes only this client's handlers.
+   */
+  onEvents(handlers: EventHandlers): () => void {
+    const cleanups: Array<() => void> = []
+
+    for (const key of Object.keys(handlers) as ListenerKey[]) {
+      const handler = handlers[key]
+      if (handler) {
+        const set = this.listeners[key] as Set<typeof handler>
+        set.add(handler)
+        cleanups.push(() => set.delete(handler))
+      }
+    }
+
+    return () => {
+      for (const cleanup of cleanups) {
+        cleanup()
+      }
+    }
+  }
+
+  // Broadcast events (called by services)
+  emitFileTree(tree: FileNode[]): void {
+    this.emit('onFileTree', tree)
+  }
+
+  emitGitDiff(diffs: FileDiff[]): void {
+    this.emit('onGitDiff', diffs)
   }
 
   // ─── Internal ─────────────────────────────────────────────
+
+  private emit<K extends ListenerKey>(key: K, ...args: Parameters<NonNullable<EventHandlers[K]>>): void {
+    const set = this.listeners[key] as Set<(...a: typeof args) => void>
+    for (const listener of set) {
+      listener(...args)
+    }
+  }
 
   private spawnPane(config: PaneConfig): PaneState {
     const pid = this.ptyManager.spawn(config.id, config)
@@ -138,18 +182,18 @@ export class WorkspaceManager {
     }
 
     this.panes.set(config.id, pane)
-    this.onPaneAdded?.(pane)
+    this.emit('onPaneAdded', pane)
 
     // Wire up PTY events
     this.ptyManager.onData(config.id, (data) => {
-      this.onTerminalData?.(config.id, data)
+      this.emit('onTerminalData', config.id, data)
     })
 
     this.ptyManager.onStatus(config.id, (status) => {
       const p = this.panes.get(config.id)
       if (p) {
         p.status = status
-        this.onPaneStatus?.(config.id, status)
+        this.emit('onPaneStatus', config.id, status)
       }
     })
 
@@ -157,7 +201,7 @@ export class WorkspaceManager {
       const p = this.panes.get(config.id)
       if (p) {
         p.meta = meta
-        this.onPaneMeta?.(config.id, meta)
+        this.emit('onPaneMeta', config.id, meta)
       }
     })
 

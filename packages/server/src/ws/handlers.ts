@@ -1,10 +1,12 @@
 import type { WebSocket } from '@fastify/websocket'
 import type { ClientEvent, ServerEvent } from '../types.ts'
 import type { WorkspaceManager } from '../workspace/WorkspaceManager.ts'
+import type { GitService } from '../git/GitService.ts'
 
 export function setupWsHandlers(
   socket: WebSocket,
   workspaceManager: WorkspaceManager,
+  gitService?: GitService,
 ): void {
   const send = (event: ServerEvent) => {
     if (socket.readyState === socket.OPEN) {
@@ -18,8 +20,8 @@ export function setupWsHandlers(
     state: workspaceManager.getState(),
   })
 
-  // Register workspace event handlers to forward to this client
-  workspaceManager.onEvents({
+  // Register event handlers for this client (multi-client safe)
+  const cleanup = workspaceManager.onEvents({
     onTerminalData: (paneId, data) => {
       send({ type: 'terminal.output', paneId, data })
     },
@@ -34,6 +36,12 @@ export function setupWsHandlers(
     },
     onPaneRemoved: (paneId) => {
       send({ type: 'pane.removed', paneId })
+    },
+    onFileTree: (tree) => {
+      send({ type: 'fs.tree', tree })
+    },
+    onGitDiff: (diff) => {
+      send({ type: 'git.diff', diff })
     },
   })
 
@@ -67,20 +75,22 @@ export function setupWsHandlers(
         workspaceManager.restartPane(event.paneId, event.mode)
         break
 
+      case 'git.refresh':
+        gitService?.refresh()
+        break
+
       case 'workspace.save':
-        // Config auto-saved on pane changes, this is for explicit save
         break
 
       case 'broadcast.send':
       case 'task.dispatch':
       case 'review.comment':
-      case 'git.refresh':
-        // P1/P2 features — no-op for now
+        // P2 features — no-op for now
         break
     }
   })
 
   socket.on('close', () => {
-    // Cleanup if needed
+    cleanup()
   })
 }

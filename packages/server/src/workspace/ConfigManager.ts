@@ -24,6 +24,12 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       statusline: true,
       env: {},
     },
+    opencode: {
+      bin: 'opencode',
+      continue_flag: '--continue',
+      statusline: false,
+      env: {},
+    },
   },
 }
 

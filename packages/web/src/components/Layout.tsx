@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react'
 import { Sidebar } from './Sidebar'
 import { AgentPane } from './AgentPane'
 import { AddPaneDialog } from './AddPaneDialog'
+import { FileTree } from './FileTree'
+import { FileViewer } from './FileViewer'
+import { GitDiffPanel } from './GitDiffPanel'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ClientEvent } from '@/types'
 import { Monitor, GitBranch, FolderTree } from 'lucide-react'
@@ -11,7 +14,7 @@ interface LayoutProps {
 }
 
 export function Layout({ send }: LayoutProps) {
-  const { panes, activePaneId, setActivePaneId, name, connectionStatus } = useWorkspaceStore()
+  const { panes, activePaneId, setActivePaneId, name, connectionStatus, selectedFile } = useWorkspaceStore()
   const [showAddDialog, setShowAddDialog] = useState(false)
 
   const handleTogglePane = useCallback(
@@ -132,7 +135,7 @@ export function Layout({ send }: LayoutProps) {
         </div>
       </div>
 
-      {/* Column 3: Diff & Code Review (placeholder) */}
+      {/* Column 3: Diff & Code Review */}
       <div
         style={{
           display: 'flex',
@@ -149,6 +152,7 @@ export function Layout({ send }: LayoutProps) {
             padding: '8px 16px',
             borderBottom: '1px solid var(--border-subtle)',
             background: 'var(--bg-surface)',
+            flexShrink: 0,
           }}
         >
           <GitBranch size={14} color="var(--text-secondary)" />
@@ -156,21 +160,12 @@ export function Layout({ send }: LayoutProps) {
             Diff & Review
           </span>
         </div>
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-muted)',
-            fontSize: 12,
-          }}
-        >
-          Coming in P1
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <GitDiffPanel send={send} />
         </div>
       </div>
 
-      {/* Column 4: File Viewer (placeholder) */}
+      {/* Column 4: Files */}
       <div
         style={{
           display: 'flex',
@@ -186,6 +181,7 @@ export function Layout({ send }: LayoutProps) {
             padding: '8px 16px',
             borderBottom: '1px solid var(--border-subtle)',
             background: 'var(--bg-surface)',
+            flexShrink: 0,
           }}
         >
           <FolderTree size={14} color="var(--text-secondary)" />
@@ -193,17 +189,12 @@ export function Layout({ send }: LayoutProps) {
             Files
           </span>
         </div>
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-muted)',
-            fontSize: 12,
-          }}
-        >
-          Coming in P1
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {selectedFile ? (
+            <FileViewer />
+          ) : (
+            <FileTree />
+          )}
         </div>
       </div>
 
