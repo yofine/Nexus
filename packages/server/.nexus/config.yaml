@@ -1,0 +1,7 @@
+version: '1'
+name: server
+description: ''
+repository:
+  path: .
+  git: false
+panes: []

@@ -4,4 +4,10 @@ description: ''
 repository:
   path: .
   git: true
-panes: []
+panes:
+  - id: pane-1
+    name: Test Agent
+    agent: claudecode
+    workdir: src
+    task: Test task
+    restore: manual
