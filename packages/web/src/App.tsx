@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { writeToTerminal } from '@/stores/terminalRegistry'
@@ -64,8 +64,10 @@ export function App() {
 
   const { send, status } = useWebSocket({ onMessage: handleMessage })
 
-  // Keep connection status in sync
-  useWorkspaceStore.getState().setConnectionStatus(status)
+  // Sync connection status via effect to avoid render-loop
+  useEffect(() => {
+    setConnectionStatus(status)
+  }, [status, setConnectionStatus])
 
   return <Layout send={send} />
 }
