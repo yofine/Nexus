@@ -64,7 +64,11 @@ export function setupWsHandlers(
         break
 
       case 'pane.create':
-        workspaceManager.createPane(event.config)
+        try {
+          workspaceManager.createPane(event.config)
+        } catch (err) {
+          console.error('pane.create failed:', err)
+        }
         break
 
       case 'pane.close':

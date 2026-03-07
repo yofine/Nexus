@@ -85,12 +85,17 @@ export class WorkspaceManager {
       ...createConfig,
     }
 
-    const pane = this.spawnPane(config)
-    // Don't persist the bottom shell pane to workspace config
-    if (!isShell) {
-      this.persistPaneConfig(config)
+    try {
+      const pane = this.spawnPane(config)
+      // Don't persist the bottom shell pane to workspace config
+      if (!isShell) {
+        this.persistPaneConfig(config)
+      }
+      return pane
+    } catch (err) {
+      console.error(`Failed to create pane ${id}:`, err)
+      throw err
     }
-    return pane
   }
 
   closePane(paneId: string): void {

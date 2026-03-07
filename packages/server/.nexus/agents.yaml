@@ -1,2 +1,9 @@
-updated_at: '2026-03-07T18:33:50.295Z'
-panes: []
+updated_at: '2026-03-07T18:36:29.858Z'
+panes:
+  - id: pane-1
+    name: '123'
+    agent: opencode
+    pid: 975153
+    status: running
+    workdir: /root/workspace/Nexus/packages/server
+    started_at: '2026-03-07T18:36:29.358Z'

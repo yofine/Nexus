@@ -131,6 +131,9 @@ export async function startServer(port: number, projectDir: string) {
 
   await fastify.listen({ port, host: '0.0.0.0' })
   console.log(`Nexus server running at http://localhost:${port}`)
+  console.log(`  Project dir: ${projectDir}`)
+  console.log(`  File tree: ${fsWatcher.getTree().length} top-level entries`)
+  console.log(`  Git diffs: ${gitService.getCurrentDiffs().length} changes`)
 
   return { fastify, workspaceManager, configManager }
 }
