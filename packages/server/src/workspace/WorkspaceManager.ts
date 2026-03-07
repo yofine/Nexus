@@ -58,9 +58,20 @@ export class WorkspaceManager {
     this.wsName = wsConfig.name
     this.wsDescription = wsConfig.description || ''
 
-    // Spawn panes from config
+    // Restore panes from config (skip failures — stale panes from previous sessions)
+    let failCount = 0
     for (const paneConfig of wsConfig.panes) {
-      this.spawnPane(paneConfig)
+      try {
+        this.spawnPane(paneConfig)
+      } catch (err) {
+        console.warn(`Skipping stale pane ${paneConfig.id} (${paneConfig.name}):`, (err as Error).message)
+        failCount++
+      }
+    }
+    // Clean stale panes from config if any failed
+    if (failCount > 0) {
+      wsConfig.panes = wsConfig.panes.filter((p) => this.panes.has(p.id))
+      this.configManager.saveWorkspaceConfig(wsConfig)
     }
   }
 

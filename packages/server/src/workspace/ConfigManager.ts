@@ -153,7 +153,14 @@ export class ConfigManager {
 
   getShell(): string {
     const global = this.loadGlobalConfig()
-    return global.defaults.shell
+    const configured = global.defaults.shell
+    // Validate shell exists, fallback to $SHELL or common defaults
+    try {
+      fs.accessSync(configured, fs.constants.X_OK)
+      return configured
+    } catch {
+      return process.env.SHELL || '/bin/sh'
+    }
   }
 
   getProjectDir(): string {
