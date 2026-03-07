@@ -5,11 +5,7 @@ repository:
   path: .
   git: false
 panes:
-  - id: pane-1
-    name: test
-    agent: opencode
-    restore: continue
-  - id: pane-2
-    name: sdfd
+  - id: pane-3
+    name: asd
     agent: opencode
     restore: continue

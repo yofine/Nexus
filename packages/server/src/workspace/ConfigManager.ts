@@ -48,6 +48,17 @@ export class ConfigManager {
     if (fs.existsSync(GLOBAL_CONFIG_PATH)) {
       const content = fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')
       this.globalConfig = yaml.load(content) as GlobalConfig
+      // Merge in any default agents missing from the saved config
+      let updated = false
+      for (const [key, def] of Object.entries(DEFAULT_GLOBAL_CONFIG.agents)) {
+        if (!this.globalConfig.agents[key]) {
+          this.globalConfig.agents[key] = def
+          updated = true
+        }
+      }
+      if (updated) {
+        this.saveGlobalConfig(this.globalConfig)
+      }
     } else {
       this.globalConfig = { ...DEFAULT_GLOBAL_CONFIG }
       const detected = this.detectAgents()
