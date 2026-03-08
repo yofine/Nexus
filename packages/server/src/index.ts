@@ -51,16 +51,21 @@ export async function startServer(port: number, projectDir: string) {
   await fastify.register(fastifyWebsocket)
 
   fastify.get('/ws', { websocket: true }, (socket) => {
-    setupWsHandlers(socket, workspaceManager, gitService)
+    try {
+      setupWsHandlers(socket, workspaceManager, gitService)
 
-    // Send initial file tree and git diffs to new client
-    const tree = fsWatcher.getTree()
-    if (tree.length > 0) {
-      socket.send(JSON.stringify({ type: 'fs.tree', tree }))
-    }
-    const diffs = gitService.getCurrentDiffs()
-    if (diffs.length > 0) {
-      socket.send(JSON.stringify({ type: 'git.diff', diff: diffs }))
+      // Send initial file tree and git diffs to new client
+      const tree = fsWatcher.getTree()
+      if (tree.length > 0) {
+        socket.send(JSON.stringify({ type: 'fs.tree', tree }))
+      }
+      const diffs = gitService.getCurrentDiffs()
+      if (diffs.length > 0) {
+        socket.send(JSON.stringify({ type: 'git.diff', diff: diffs }))
+      }
+      console.log('[WS] Client connected')
+    } catch (err) {
+      console.error('[WS] Error in connection handler:', err)
     }
   })
 
