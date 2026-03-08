@@ -117,19 +117,20 @@ export async function startServer(port: number, projectDir: string) {
   const webDistPath = path.resolve(__dirname, '../../web/dist')
   console.log(`  Web dist: ${webDistPath} (exists: ${fs.existsSync(webDistPath)})`)
   if (fs.existsSync(webDistPath)) {
-    // Register static file serving in its own encapsulated scope
-    // to avoid wildcard route conflicts with WebSocket
-    await fastify.register(async function staticPlugin(app) {
-      await app.register(fastifyStatic, {
-        root: webDistPath,
-        prefix: '/',
-        wildcard: true,
-      })
+    await fastify.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: '/',
+      wildcard: false,
+    })
 
-      // SPA fallback — serve index.html for non-API, non-WS routes
-      app.setNotFoundHandler((_req, reply) => {
-        reply.sendFile('index.html')
-      })
+    // Explicit root route to serve index.html
+    fastify.get('/', (_req, reply) => {
+      reply.sendFile('index.html')
+    })
+
+    // SPA fallback for client-side routing
+    fastify.setNotFoundHandler((_req, reply) => {
+      reply.sendFile('index.html')
     })
   }
 

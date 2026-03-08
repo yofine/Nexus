@@ -15,11 +15,9 @@ export default defineConfig({
       '/nexus-ws': {
         target: 'http://localhost:7700',
         ws: true,
-        changeOrigin: true,
       },
       '/api': {
         target: 'http://localhost:7700',
-        changeOrigin: true,
       },
     },
   },
