@@ -2,9 +2,11 @@
   "name": "nexus",
   "private": true,
   "scripts": {
-    "dev": "NEXUS_PROJECT_DIR=$PWD pnpm -r --parallel dev",
+    "dev": "pnpm run build:web && NEXUS_PROJECT_DIR=$PWD tsx watch packages/server/src/cli.ts",
+    "dev:full": "NEXUS_PROJECT_DIR=$PWD pnpm -r --parallel dev",
+    "build:web": "pnpm --filter @nexus/web build",
     "build": "pnpm -r build",
-    "start": "node --import tsx packages/server/src/cli.ts"
+    "start": "NEXUS_PROJECT_DIR=$PWD node --import tsx packages/server/src/cli.ts"
   },
   "engines": {
     "node": ">=22"
