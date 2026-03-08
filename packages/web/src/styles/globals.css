@@ -235,3 +235,48 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ── Resize Handle ── */
+[data-resize-handle]:hover > div,
+[data-resize-handle]:active > div {
+  background: var(--accent-primary) !important;
+  width: 2px !important;
+}
+
+/* ── cmdk Command Palette ── */
+[cmdk-item] {
+  transition: background 0.1s;
+}
+[cmdk-item][data-selected="true"] {
+  background: var(--accent-subtle);
+}
+[cmdk-item]:hover {
+  background: var(--bg-overlay);
+}
+
+/* ── Shiki code highlighting ── */
+.shiki-wrapper pre.shiki {
+  margin: 0;
+  padding: 8px 0;
+  background: transparent !important;
+  overflow-x: auto;
+}
+.shiki-wrapper pre.shiki code {
+  display: block;
+  counter-reset: line;
+}
+.shiki-wrapper pre.shiki code .line {
+  display: inline-block;
+  width: 100%;
+  padding: 0 12px;
+}
+.shiki-wrapper pre.shiki code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 40px;
+  text-align: right;
+  margin-right: 12px;
+  color: var(--text-muted);
+  user-select: none;
+}

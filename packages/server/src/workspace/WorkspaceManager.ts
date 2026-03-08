@@ -142,6 +142,10 @@ export class WorkspaceManager {
     this.ptyManager.resize(paneId, cols, rows)
   }
 
+  getScrollback(paneId: string): string {
+    return this.ptyManager.getScrollback(paneId)
+  }
+
   // ─── Event Registration (multi-client safe) ────────────────
 
   /**

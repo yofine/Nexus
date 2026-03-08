@@ -19,6 +19,12 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  const onDataRef = useRef(onData)
+  const onResizeRef = useRef(onResize)
+
+  // Keep refs up to date without re-running the effect
+  onDataRef.current = onData
+  onResizeRef.current = onResize
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -47,12 +53,12 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
     // Initial fit
     requestAnimationFrame(() => {
       fitAddon.fit()
-      onResize(term.cols, term.rows)
+      onResizeRef.current(term.cols, term.rows)
     })
 
     // Forward keyboard input to server
     term.onData((data) => {
-      onData(data)
+      onDataRef.current(data)
     })
 
     // Register write function for incoming terminal output
@@ -69,7 +75,7 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
         if (fitRef.current && containerRef.current && containerRef.current.clientHeight > 0) {
           fitRef.current.fit()
           if (termRef.current) {
-            onResize(termRef.current.cols, termRef.current.rows)
+            onResizeRef.current(termRef.current.cols, termRef.current.rows)
           }
         }
       })
@@ -84,7 +90,7 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
       termRef.current = null
       fitRef.current = null
     }
-  }, [paneId, onData, onResize])
+  }, [paneId])
 
   return (
     <div

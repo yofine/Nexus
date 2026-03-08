@@ -5,11 +5,15 @@ repository:
   path: .
   git: true
 panes:
-  - id: pane-4
-    name: '123'
+  - id: pane-16
+    name: opencode 一号
     agent: opencode
     restore: continue
-  - id: pane-5
-    name: '12313213'
+  - id: pane-17
+    name: opencode 二号
     agent: opencode
-    restore: continue
+    restore: manual
+  - id: pane-18
+    name: opencode 三号
+    agent: opencode
+    restore: manual

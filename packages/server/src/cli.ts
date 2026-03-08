@@ -2,6 +2,11 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { startServer } from './index.ts'
 
+// Clean up parent session env so spawned PTYs don't detect nesting
+delete process.env.CLAUDECODE
+delete process.env.CLAUDE_CODE
+delete process.env.CLAUDE_CODE_ENTRYPOINT
+
 const DEFAULT_PORT = 7700
 
 function findProjectRoot(startDir: string): string {

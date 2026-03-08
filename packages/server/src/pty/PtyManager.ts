@@ -4,12 +4,16 @@ import type { PaneConfig, PaneStatus, PaneMeta, AgentDefinition } from '../types
 import { StatuslineParser } from './StatuslineParser.ts'
 import type { ConfigManager } from '../workspace/ConfigManager.ts'
 
+const MAX_SCROLLBACK_BYTES = 512 * 1024 // 512KB per pane
+
 interface PtyEntry {
   pty: pty.IPty
   config: PaneConfig
   status: PaneStatus
   meta: PaneMeta
   parser: StatuslineParser
+  scrollback: string[]
+  scrollbackBytes: number
   onDataCallbacks: Array<(data: string) => void>
   onStatusCallbacks: Array<(status: PaneStatus) => void>
   onMetaCallbacks: Array<(meta: PaneMeta) => void>
@@ -37,11 +41,13 @@ export class PtyManager {
     const agentDef = this.configManager.getAgentDefinition(config.agent)
 
     // Build environment from agent definition
-    const env: Record<string, string> = { ...process.env as Record<string, string> }
-    // Remove variables that prevent nested agent sessions
-    delete env.CLAUDECODE
-    delete env.CLAUDE_CODE
-    delete env.CLAUDE_CODE_ENTRYPOINT
+    // Filter out all Claude-related env vars to prevent nested session detection
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined && !key.startsWith('CLAUDE') && key !== 'CLAUDECODE') {
+        env[key] = value
+      }
+    }
     if (agentDef?.env) {
       for (const [key, value] of Object.entries(agentDef.env)) {
         // Resolve ${VAR} references from process.env
@@ -66,6 +72,8 @@ export class PtyManager {
       status: 'running',
       meta: {},
       parser: new StatuslineParser(),
+      scrollback: [],
+      scrollbackBytes: 0,
       onDataCallbacks: [],
       onStatusCallbacks: [],
       onMetaCallbacks: [],
@@ -78,6 +86,15 @@ export class PtyManager {
       const { cleanData, meta } = entry.parser.parse(data)
 
       if (cleanData) {
+        // Buffer for scrollback replay
+        entry.scrollback.push(cleanData)
+        entry.scrollbackBytes += cleanData.length
+        // Trim if over budget
+        while (entry.scrollbackBytes > MAX_SCROLLBACK_BYTES && entry.scrollback.length > 1) {
+          const removed = entry.scrollback.shift()!
+          entry.scrollbackBytes -= removed.length
+        }
+
         for (const cb of entry.onDataCallbacks) {
           cb(cleanData)
         }
@@ -204,6 +221,12 @@ export class PtyManager {
     if (entry) {
       entry.onMetaCallbacks.push(callback)
     }
+  }
+
+  getScrollback(paneId: string): string {
+    const entry = this.entries.get(paneId)
+    if (!entry) return ''
+    return entry.scrollback.join('')
   }
 
   has(paneId: string): boolean {

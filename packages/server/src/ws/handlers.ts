@@ -15,10 +15,19 @@ export function setupWsHandlers(
   }
 
   // Send initial workspace state
+  const state = workspaceManager.getState()
   send({
     type: 'workspace.state',
-    state: workspaceManager.getState(),
+    state,
   })
+
+  // Replay terminal scrollback for each pane
+  for (const pane of state.panes) {
+    const scrollback = workspaceManager.getScrollback(pane.id)
+    if (scrollback) {
+      send({ type: 'terminal.output', paneId: pane.id, data: scrollback })
+    }
+  }
 
   // Register event handlers for this client (multi-client safe)
   const cleanup = workspaceManager.onEvents({
