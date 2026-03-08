@@ -17,7 +17,7 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions) {
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws`
+    const wsUrl = `${protocol}//${window.location.host}/nexus-ws`
 
     console.log('[Nexus] Connecting to', wsUrl)
     const ws = new WebSocket(wsUrl)

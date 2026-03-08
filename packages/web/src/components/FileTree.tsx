@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Folder, FolderOpen, File, ChevronRight, ChevronDown } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { FileNode } from '@/types'
@@ -96,23 +96,29 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths
 
 export function FileTree() {
   const { fileTree, tabs, activeTabId, openFileTab } = useWorkspaceStore()
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    // Auto-expand two levels deep
-    const initial = new Set<string>()
-    for (const node of fileTree) {
-      if (node.type === 'directory') {
-        initial.add(node.path)
-        if (node.children) {
-          for (const child of node.children) {
-            if (child.type === 'directory') {
-              initial.add(child.path)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const initializedRef = useRef(false)
+
+  // Auto-expand two levels deep when file tree first arrives
+  useEffect(() => {
+    if (fileTree.length > 0 && !initializedRef.current) {
+      initializedRef.current = true
+      const initial = new Set<string>()
+      for (const node of fileTree) {
+        if (node.type === 'directory') {
+          initial.add(node.path)
+          if (node.children) {
+            for (const child of node.children) {
+              if (child.type === 'directory') {
+                initial.add(child.path)
+              }
             }
           }
         }
       }
+      setExpanded(initial)
     }
-    return initial
-  })
+  }, [fileTree])
 
   // Derive which files have open tabs and which is active
   const openFilePaths = new Set(

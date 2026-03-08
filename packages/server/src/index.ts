@@ -50,7 +50,7 @@ export async function startServer(port: number, projectDir: string) {
   // WebSocket
   await fastify.register(fastifyWebsocket)
 
-  fastify.get('/ws', { websocket: true }, (socket) => {
+  fastify.get('/nexus-ws', { websocket: true }, (socket) => {
     try {
       setupWsHandlers(socket, workspaceManager, gitService)
 

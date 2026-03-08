@@ -12,7 +12,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/ws': {
+      '/nexus-ws': {
         target: 'ws://localhost:7700',
         ws: true,
       },
