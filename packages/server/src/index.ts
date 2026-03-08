@@ -148,7 +148,17 @@ export async function startServer(port: number, projectDir: string) {
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 
-  await fastify.listen({ port, host: '0.0.0.0' })
+  try {
+    await fastify.listen({ port, host: '0.0.0.0' })
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use. Kill the existing process or use a different port:`)
+      console.error(`  NEXUS_PORT=7800 pnpm dev`)
+      console.error(`  # or find and kill: lsof -i :${port}`)
+      process.exit(1)
+    }
+    throw err
+  }
   console.log(`Nexus server running at http://localhost:${port}`)
   console.log(`  Project dir: ${projectDir}`)
   console.log(`  File tree: ${fsWatcher.getTree().length} top-level entries`)

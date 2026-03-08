@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
+const serverPort = process.env.NEXUS_PORT || '7700'
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -13,11 +15,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/nexus-ws': {
-        target: 'http://localhost:7700',
+        target: `http://localhost:${serverPort}`,
         ws: true,
       },
       '/api': {
-        target: 'http://localhost:7700',
+        target: `http://localhost:${serverPort}`,
       },
     },
   },
