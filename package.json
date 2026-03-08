@@ -2,7 +2,7 @@
   "name": "nexus",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
+    "dev": "NEXUS_PROJECT_DIR=$PWD pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "start": "node --import tsx packages/server/src/cli.ts"
   },

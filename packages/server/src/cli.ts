@@ -5,19 +5,24 @@ import { startServer } from './index.ts'
 const DEFAULT_PORT = 7700
 
 function findProjectRoot(startDir: string): string {
+  // Walk up from startDir, prefer the highest-level match
+  // (monorepo root, not a nested package)
   let dir = startDir
+  let bestMatch = startDir
+
   while (dir !== path.dirname(dir)) {
-    // Look for markers that indicate the project root
+    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
+      return dir // pnpm monorepo root is definitive
+    }
     if (
-      fs.existsSync(path.join(dir, '.nexus')) ||
-      fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')) ||
-      fs.existsSync(path.join(dir, '.git'))
+      fs.existsSync(path.join(dir, '.git')) ||
+      fs.existsSync(path.join(dir, '.nexus'))
     ) {
-      return dir
+      bestMatch = dir // keep walking up in case there's a monorepo root above
     }
     dir = path.dirname(dir)
   }
-  return startDir
+  return bestMatch
 }
 
 async function main() {
