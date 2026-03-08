@@ -15,10 +15,24 @@ export class StatuslineParser {
    */
   parse(data: string): { cleanData: string; meta: PaneMeta | null } {
     let meta: PaneMeta | null = null
-    const lines = (this.buffer + data).split('\n')
 
-    // Keep the last incomplete line in the buffer
-    this.buffer = lines.pop() || ''
+    // If data contains no newline, it's a partial chunk (e.g. keystroke echo, prompt).
+    // Pass it through immediately — statusline JSON always arrives as a complete line.
+    if (!data.includes('\n')) {
+      // Accumulate into buffer for potential statusline detection,
+      // but also pass through to terminal immediately.
+      this.buffer += data
+      return { cleanData: data, meta: null }
+    }
+
+    const lines = (this.buffer + data).split('\n')
+    this.buffer = ''
+
+    // Last element is either empty (data ended with \n) or an incomplete line
+    const trailing = lines.pop() || ''
+    if (trailing) {
+      this.buffer = trailing
+    }
 
     const cleanLines: string[] = []
 
@@ -41,9 +55,9 @@ export class StatuslineParser {
       cleanLines.push(line)
     }
 
-    // Reconstruct the output with remaining lines
+    // Reconstruct: join complete lines with \n, add trailing \n since each was a complete line
     let cleanData = cleanLines.join('\n')
-    if (this.buffer) {
+    if (cleanLines.length > 0) {
       cleanData += '\n'
     }
 

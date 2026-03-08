@@ -5,9 +5,11 @@ repository:
   path: .
   git: true
 panes:
-  - id: pane-1
-    name: Test Agent
-    agent: claudecode
-    workdir: src
-    task: Test task
-    restore: manual
+  - id: pane-4
+    name: '123'
+    agent: opencode
+    restore: continue
+  - id: pane-5
+    name: '12313213'
+    agent: opencode
+    restore: continue

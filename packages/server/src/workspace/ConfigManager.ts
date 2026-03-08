@@ -154,13 +154,18 @@ export class ConfigManager {
   getShell(): string {
     const global = this.loadGlobalConfig()
     const configured = global.defaults.shell
-    // Validate shell exists, fallback to $SHELL or common defaults
-    try {
-      fs.accessSync(configured, fs.constants.X_OK)
-      return configured
-    } catch {
-      return process.env.SHELL || '/bin/sh'
+    // Prefer zsh > configured > $SHELL > /bin/sh
+    const candidates = ['/usr/bin/zsh', '/bin/zsh', configured, process.env.SHELL, '/bin/sh']
+    for (const sh of candidates) {
+      if (!sh) continue
+      try {
+        fs.accessSync(sh, fs.constants.X_OK)
+        return sh
+      } catch {
+        // try next
+      }
     }
+    return '/bin/sh'
   }
 
   getProjectDir(): string {

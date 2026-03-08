@@ -120,12 +120,6 @@ export async function startServer(port: number, projectDir: string) {
     await fastify.register(fastifyStatic, {
       root: webDistPath,
       prefix: '/',
-      wildcard: false,
-    })
-
-    // Explicit root route to serve index.html
-    fastify.get('/', (_req, reply) => {
-      reply.sendFile('index.html')
     })
 
     // SPA fallback for client-side routing

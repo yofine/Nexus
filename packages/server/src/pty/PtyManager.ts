@@ -38,6 +38,10 @@ export class PtyManager {
 
     // Build environment from agent definition
     const env: Record<string, string> = { ...process.env as Record<string, string> }
+    // Remove variables that prevent nested agent sessions
+    delete env.CLAUDECODE
+    delete env.CLAUDE_CODE
+    delete env.CLAUDE_CODE_ENTRYPOINT
     if (agentDef?.env) {
       for (const [key, value] of Object.entries(agentDef.env)) {
         // Resolve ${VAR} references from process.env
@@ -143,14 +147,22 @@ export class PtyManager {
   resize(paneId: string, cols: number, rows: number): void {
     const entry = this.entries.get(paneId)
     if (entry) {
-      entry.pty.resize(cols, rows)
+      try {
+        entry.pty.resize(cols, rows)
+      } catch {
+        // PTY may not be ready yet (ENOTTY), ignore
+      }
     }
   }
 
   kill(paneId: string): void {
     const entry = this.entries.get(paneId)
     if (entry) {
-      entry.pty.kill()
+      try {
+        entry.pty.kill()
+      } catch {
+        // Process may already be dead
+      }
       this.entries.delete(paneId)
     }
   }

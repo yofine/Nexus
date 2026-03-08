@@ -11,7 +11,7 @@ import type { PaneState, ClientEvent } from '@/types'
 
 interface AgentPaneProps {
   pane: PaneState
-  isActive: boolean
+  isExpanded: boolean
   onToggle: () => void
   send: (event: ClientEvent) => void
 }
@@ -24,7 +24,7 @@ const statusColors: Record<string, string> = {
   error: 'var(--status-error)',
 }
 
-export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
+export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) {
   const handleTerminalData = useCallback(
     (data: string) => {
       send({ type: 'terminal.input', paneId: pane.id, data })
@@ -52,13 +52,14 @@ export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
   return (
     <div
       style={{
-        border: `1px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
+        border: `1px solid ${isExpanded ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
         borderRadius: 6,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        flex: isActive ? 1 : 'none',
-        minHeight: isActive ? 0 : undefined,
+        flexShrink: 0,
+        height: isExpanded ? 'clamp(300px, 60vh, 800px)' : 'auto',
+        position: 'relative',
       }}
     >
       {/* Header */}
@@ -70,12 +71,12 @@ export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
           gap: 8,
           padding: '8px 12px',
           cursor: 'pointer',
-          background: isActive ? 'var(--bg-elevated)' : 'var(--bg-surface)',
-          borderBottom: isActive ? '1px solid var(--border-subtle)' : 'none',
+          background: isExpanded ? 'var(--bg-elevated)' : 'var(--bg-surface)',
+          borderBottom: isExpanded ? '1px solid var(--border-subtle)' : 'none',
           userSelect: 'none',
         }}
       >
-        {isActive ? (
+        {isExpanded ? (
           <ChevronDown size={14} color="var(--text-secondary)" />
         ) : (
           <ChevronRight size={14} color="var(--text-secondary)" />
@@ -110,7 +111,7 @@ export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
           </span>
         )}
 
-        {!isActive && pane.task && (
+        {!isExpanded && pane.task && (
           <span
             style={{
               fontSize: 11,
@@ -171,8 +172,8 @@ export function AgentPane({ pane, isActive, onToggle, send }: AgentPaneProps) {
         </div>
       </div>
 
-      {/* Expanded Body — terminal fills the entire area, user types directly in it */}
-      {isActive && (
+      {/* Terminal body — conditionally rendered; registry buffers output while collapsed */}
+      {isExpanded && (
         <div style={{ flex: 1, minHeight: 0 }}>
           <Terminal
             paneId={pane.id}
