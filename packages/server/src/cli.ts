@@ -35,14 +35,6 @@ async function main() {
     case undefined: {
       const port = parseInt(process.env.NEXUS_PORT || String(DEFAULT_PORT), 10)
       await startServer(port, projectDir)
-
-      // Open browser (lazy import to keep startup fast)
-      try {
-        const open = await import('open')
-        await open.default(`http://localhost:${port}`)
-      } catch {
-        console.log(`Open http://localhost:${port} in your browser`)
-      }
       break
     }
 
