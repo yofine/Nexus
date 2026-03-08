@@ -19,10 +19,12 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${protocol}//${window.location.host}/ws`
 
+    console.log('[Nexus] Connecting to', wsUrl)
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
+      console.log('[Nexus] WebSocket connected')
       setStatus('connected')
       reconnectDelay.current = 1000
     }
@@ -36,7 +38,8 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions) {
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      console.log('[Nexus] WebSocket closed:', e.code, e.reason)
       setStatus('reconnecting')
       wsRef.current = null
 
@@ -47,7 +50,8 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions) {
       }, reconnectDelay.current)
     }
 
-    ws.onerror = () => {
+    ws.onerror = (e) => {
+      console.error('[Nexus] WebSocket error:', e)
       ws.close()
     }
   }, [])
@@ -63,6 +67,8 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions) {
   const send = useCallback((event: ClientEvent) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(event))
+    } else {
+      console.warn('[Nexus] WebSocket not connected, dropping event:', event.type)
     }
   }, [])
 
