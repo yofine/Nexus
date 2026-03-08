@@ -50,7 +50,8 @@ export async function startServer(port: number, projectDir: string) {
   // WebSocket
   await fastify.register(fastifyWebsocket)
 
-  fastify.get('/nexus-ws', { websocket: true }, (socket) => {
+  fastify.get('/nexus-ws', { websocket: true }, (socket, req) => {
+    console.log('[WS] Upgrade request from', req.ip)
     try {
       setupWsHandlers(socket, workspaceManager, gitService)
 
@@ -64,6 +65,13 @@ export async function startServer(port: number, projectDir: string) {
         socket.send(JSON.stringify({ type: 'git.diff', diff: diffs }))
       }
       console.log('[WS] Client connected')
+
+      socket.on('close', (code: number, reason: Buffer) => {
+        console.log(`[WS] Client disconnected: code=${code} reason=${reason.toString()}`)
+      })
+      socket.on('error', (err: Error) => {
+        console.error('[WS] Socket error:', err)
+      })
     } catch (err) {
       console.error('[WS] Error in connection handler:', err)
     }
@@ -107,16 +115,21 @@ export async function startServer(port: number, projectDir: string) {
 
   // Serve static frontend in production
   const webDistPath = path.resolve(__dirname, '../../web/dist')
+  console.log(`  Web dist: ${webDistPath} (exists: ${fs.existsSync(webDistPath)})`)
   if (fs.existsSync(webDistPath)) {
-    await fastify.register(fastifyStatic, {
-      root: webDistPath,
-      prefix: '/',
-      wildcard: false,
-    })
+    // Register static file serving in its own encapsulated scope
+    // to avoid wildcard route conflicts with WebSocket
+    await fastify.register(async function staticPlugin(app) {
+      await app.register(fastifyStatic, {
+        root: webDistPath,
+        prefix: '/',
+        wildcard: true,
+      })
 
-    // SPA fallback
-    fastify.setNotFoundHandler((_req, reply) => {
-      reply.sendFile('index.html')
+      // SPA fallback — serve index.html for non-API, non-WS routes
+      app.setNotFoundHandler((_req, reply) => {
+        reply.sendFile('index.html')
+      })
     })
   }
 
