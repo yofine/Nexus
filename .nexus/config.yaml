@@ -17,3 +17,11 @@ panes:
     name: opencode 三号
     agent: opencode
     restore: manual
+  - id: pane-1
+    name: cc
+    agent: claudecode
+    restore: manual
+  - id: pane-2
+    name: cc 二号
+    agent: claudecode
+    restore: manual

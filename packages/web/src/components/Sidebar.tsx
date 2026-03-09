@@ -19,14 +19,14 @@ function SidebarButton({ icon, title, onClick, disabled }: SidebarButtonProps) {
       disabled={disabled}
       title={title}
       style={{
-        width: 36,
-        height: 36,
+        width: 'var(--btn-size)',
+        height: 'var(--btn-size)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: 'none',
         border: 'none',
-        borderRadius: 6,
+        borderRadius: 'var(--radius-md)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.3 : 1,
         transition: 'background 0.15s',
@@ -51,43 +51,43 @@ export function Sidebar({ onAddPane }: SidebarProps) {
   return (
     <div
       style={{
-        width: 48,
+        width: 'var(--sidebar-width)',
         height: '100%',
         background: 'var(--bg-surface)',
         borderRight: '1px solid var(--border-subtle)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        paddingTop: 12,
-        gap: 4,
+        paddingTop: 'var(--space-lg)',
+        gap: 'var(--space-xs)',
       }}
     >
       <SidebarButton
-        icon={<Plus size={18} color="var(--text-secondary)" />}
+        icon={<Plus className="sidebar-icon" />}
         title="Add Pane"
         onClick={onAddPane}
       />
       <SidebarButton
-        icon={<GitBranch size={18} color="var(--text-secondary)" />}
+        icon={<GitBranch className="sidebar-icon" />}
         title="Review Diffs"
         onClick={openDiffTab}
       />
       <SidebarButton
-        icon={<Zap size={18} color="var(--text-muted)" />}
+        icon={<Zap className="sidebar-icon sidebar-icon--disabled" />}
         title="Task Dispatch (coming soon)"
         disabled
       />
       <SidebarButton
-        icon={<ClipboardList size={18} color="var(--text-muted)" />}
+        icon={<ClipboardList className="sidebar-icon sidebar-icon--disabled" />}
         title="Templates (coming soon)"
         disabled
       />
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 'var(--space-lg)' }}>
         <SidebarButton
-          icon={<Settings size={18} color="var(--text-muted)" />}
+          icon={<Settings className="sidebar-icon sidebar-icon--disabled" />}
           title="Settings (coming soon)"
           disabled
         />

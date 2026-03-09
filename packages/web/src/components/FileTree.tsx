@@ -31,22 +31,11 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths
     <>
       <div
         onClick={handleClick}
+        className="file-tree-node"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '2px 8px',
-          paddingLeft: 8 + depth * 16,
-          cursor: 'pointer',
-          fontSize: 12,
-          fontFamily: 'var(--font-mono)',
+          paddingLeft: `calc(var(--space-md) + ${depth} * var(--space-xl))`,
           color: isActive ? 'var(--text-primary)' : isOpen ? 'var(--accent-primary)' : 'var(--text-secondary)',
           background: isActive ? 'var(--accent-subtle)' : 'transparent',
-          borderRadius: 3,
-          userSelect: 'none',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
         }}
         onMouseEnter={(e) => {
           if (!isActive) e.currentTarget.style.background = 'var(--bg-overlay)'
@@ -57,22 +46,22 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths
       >
         {isDir ? (
           isExpanded ? (
-            <ChevronDown size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+            <ChevronDown className="icon-xs" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           ) : (
-            <ChevronRight size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+            <ChevronRight className="icon-xs" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           )
         ) : (
-          <span style={{ width: 12, flexShrink: 0 }} />
+          <span className="icon-xs" style={{ flexShrink: 0 }} />
         )}
 
         {isDir ? (
           isExpanded ? (
-            <FolderOpen size={14} color="var(--accent-primary)" style={{ flexShrink: 0 }} />
+            <FolderOpen className="icon-sm" style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
           ) : (
-            <Folder size={14} color="var(--accent-primary)" style={{ flexShrink: 0 }} />
+            <Folder className="icon-sm" style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
           )
         ) : (
-          <File size={14} color={isOpen ? 'var(--accent-primary)' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+          <File className="icon-sm" style={{ color: isOpen ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
         )}
 
         <span>{node.name}</span>
@@ -152,7 +141,7 @@ export function FileTree() {
           justifyContent: 'center',
           height: '100%',
           color: 'var(--text-muted)',
-          fontSize: 12,
+          fontSize: 'var(--font-sm)',
         }}
       >
         No files
@@ -161,7 +150,7 @@ export function FileTree() {
   }
 
   return (
-    <div style={{ overflowY: 'auto', overflowX: 'hidden', padding: '4px 0' }}>
+    <div style={{ overflowY: 'auto', overflowX: 'hidden', padding: 'var(--space-xs) 0' }}>
       {fileTree.map((node) => (
         <FileTreeNode
           key={node.path}

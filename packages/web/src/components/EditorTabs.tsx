@@ -23,10 +23,10 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
-        padding: '6px 12px',
+        gap: 'var(--space-sm)',
+        padding: 'var(--tab-padding)',
         cursor: 'pointer',
-        fontSize: 12,
+        fontSize: 'var(--font-sm)',
         fontFamily: 'var(--font-mono)',
         color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
         background: isActive ? 'var(--bg-elevated)' : 'transparent',
@@ -42,7 +42,7 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
         if (!isActive) e.currentTarget.style.background = 'transparent'
       }}
     >
-      <Icon size={12} color={isActive ? 'var(--accent-primary)' : 'var(--text-muted)'} />
+      <Icon className="icon-xs" style={{ color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
       <span>{tab.label}</span>
       <button
         onClick={onClose}
@@ -53,7 +53,7 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
           padding: 2,
           display: 'flex',
           alignItems: 'center',
-          borderRadius: 3,
+          borderRadius: 'var(--radius-sm)',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'var(--bg-overlay)'
@@ -62,7 +62,7 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
           e.currentTarget.style.background = 'none'
         }}
       >
-        <X size={10} color="var(--text-muted)" />
+        <X className="icon-xs" style={{ color: 'var(--text-muted)' }} />
       </button>
     </div>
   )
@@ -82,12 +82,12 @@ export function EditorTabs({ send }: EditorTabsProps) {
           alignItems: 'center',
           justifyContent: 'center',
           height: '100%',
-          gap: 8,
+          gap: 'var(--space-md)',
           color: 'var(--text-muted)',
         }}
       >
-        <File size={28} />
-        <span style={{ fontSize: 13 }}>Open a file or view diffs</span>
+        <File className="icon-hero" />
+        <span style={{ fontSize: 'var(--font-md)' }}>Open a file or view diffs</span>
       </div>
     )
   }

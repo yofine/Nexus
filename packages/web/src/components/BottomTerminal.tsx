@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Terminal as TerminalIcon, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Terminal as TerminalIcon, ChevronDown, ChevronUp } from 'lucide-react'
 import { Terminal } from './Terminal'
 import type { ClientEvent } from '@/types'
 
@@ -53,23 +53,23 @@ export function BottomTerminal({ send }: BottomTerminalProps) {
         style={{
           position: 'fixed',
           bottom: 0,
-          left: 48,
+          left: 'var(--sidebar-width)',
           right: 0,
-          height: 32,
+          height: 'var(--header-height)',
           background: 'var(--bg-surface)',
           borderTop: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
-          padding: '0 12px',
-          gap: 8,
+          padding: '0 var(--space-lg)',
+          gap: 'var(--space-md)',
           zIndex: 10,
           cursor: 'pointer',
         }}
         onClick={handleOpen}
       >
-        <TerminalIcon size={14} color="var(--text-secondary)" />
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Terminal</span>
-        <ChevronUp size={14} color="var(--text-muted)" style={{ marginLeft: 'auto' }} />
+        <TerminalIcon className="icon-sm" style={{ color: 'var(--text-secondary)' }} />
+        <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>Terminal</span>
+        <ChevronUp className="icon-sm" style={{ color: 'var(--text-muted)', marginLeft: 'auto' }} />
       </div>
     )
   }
@@ -79,7 +79,7 @@ export function BottomTerminal({ send }: BottomTerminalProps) {
       style={{
         position: 'fixed',
         bottom: 0,
-        left: 48,
+        left: 'var(--sidebar-width)',
         right: 0,
         height: '35vh',
         background: 'var(--bg-base)',
@@ -94,30 +94,30 @@ export function BottomTerminal({ send }: BottomTerminalProps) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          padding: '4px 12px',
-          gap: 8,
+          padding: 'var(--space-xs) var(--space-lg)',
+          gap: 'var(--space-md)',
           background: 'var(--bg-surface)',
           borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
         }}
       >
-        <TerminalIcon size={14} color="var(--text-secondary)" />
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Terminal</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+        <TerminalIcon className="icon-sm" style={{ color: 'var(--text-secondary)' }} />
+        <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', fontWeight: 500 }}>Terminal</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-xs)' }}>
           <button
             onClick={handleClose}
             style={{
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              padding: 4,
+              padding: 'var(--space-xs)',
               display: 'flex',
               alignItems: 'center',
-              borderRadius: 3,
+              borderRadius: 'var(--radius-sm)',
             }}
             title="Minimize"
           >
-            <ChevronDown size={14} color="var(--text-muted)" />
+            <ChevronDown className="icon-sm" style={{ color: 'var(--text-muted)' }} />
           </button>
         </div>
       </div>

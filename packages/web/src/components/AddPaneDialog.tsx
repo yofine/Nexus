@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AgentIcon, getAgentDisplayName } from './AgentIcon'
 import type { ClientEvent, AgentType, RestoreMode } from '@/types'
 
 interface AddPaneDialogProps {
@@ -54,20 +55,11 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div
-        style={{
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 8,
-          padding: 24,
-          width: 420,
-          maxWidth: '90vw',
-        }}
-      >
+      <div className="add-pane-dialog">
         <h2
           style={{
-            margin: '0 0 20px 0',
-            fontSize: 16,
+            margin: '0 0 var(--space-xl) 0',
+            fontSize: 'var(--font-xl)',
             fontWeight: 600,
             color: 'var(--text-primary)',
           }}
@@ -75,105 +67,89 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           Add Pane
         </h2>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
           {/* Name */}
           <div>
-            <label style={labelStyle}>Name</label>
+            <label className="form-label">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Auth Refactor"
               required
-              style={inputStyle}
+              className="form-input"
               autoFocus
             />
           </div>
 
           {/* Agent Type */}
           <div>
-            <label style={labelStyle}>Agent</label>
-            <select
-              value={agent}
-              onChange={(e) => setAgent(e.target.value as AgentType)}
-              style={inputStyle}
-            >
-              <option value="claudecode">Claude Code</option>
-              <option value="opencode">OpenCode</option>
-            </select>
+            <label className="form-label">Agent</label>
+            <div className="agent-selector-grid">
+              {(['claudecode', 'opencode', 'aider', 'codex', 'gemini'] as const).map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => setAgent(a as AgentType)}
+                  className={`agent-selector-btn${agent === a ? ' agent-selector-btn--active' : ''}`}
+                >
+                  <AgentIcon agent={a} size="var(--icon-md)" />
+                  <span>{getAgentDisplayName(a)}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Working Directory */}
-          <div>
-            <label style={labelStyle}>Working Directory (optional)</label>
-            <input
-              type="text"
-              value={workdir}
-              onChange={(e) => setWorkdir(e.target.value)}
-              placeholder="e.g. src/auth"
-              style={inputStyle}
-            />
+          {/* Working Directory + Restore Mode side by side on large screens */}
+          <div className="form-row-pair">
+            <div style={{ flex: 1 }}>
+              <label className="form-label">Working Directory (optional)</label>
+              <input
+                type="text"
+                value={workdir}
+                onChange={(e) => setWorkdir(e.target.value)}
+                placeholder="e.g. src/auth"
+                className="form-input"
+              />
+            </div>
+            <div style={{ flex: 0, minWidth: 160 }}>
+              <label className="form-label">Restore Mode</label>
+              <select
+                value={restore}
+                onChange={(e) => setRestore(e.target.value as RestoreMode)}
+                className="form-input"
+              >
+                <option value="continue">Continue (--continue)</option>
+                <option value="restart">Restart</option>
+                <option value="manual">Manual</option>
+              </select>
+            </div>
           </div>
 
           {/* Task */}
           <div>
-            <label style={labelStyle}>Task (optional)</label>
+            <label className="form-label">Task (optional)</label>
             <textarea
               value={task}
               onChange={(e) => setTask(e.target.value)}
               placeholder="Describe what this agent should work on..."
               rows={3}
-              style={{
-                ...inputStyle,
-                resize: 'vertical',
-                fontFamily: 'var(--font-ui)',
-              }}
+              className="form-input form-textarea"
             />
           </div>
 
-          {/* Restore Mode */}
-          <div>
-            <label style={labelStyle}>Restore Mode</label>
-            <select
-              value={restore}
-              onChange={(e) => setRestore(e.target.value as RestoreMode)}
-              style={inputStyle}
-            >
-              <option value="continue">Continue (--continue)</option>
-              <option value="restart">Restart</option>
-              <option value="manual">Manual</option>
-            </select>
-          </div>
-
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
             <button
               type="button"
               onClick={onClose}
-              style={{
-                background: 'var(--bg-overlay)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 4,
-                padding: '8px 16px',
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
+              className="btn btn--secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
-              style={{
-                background: 'var(--accent-primary)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 4,
-                padding: '8px 16px',
-                cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: 500,
-              }}
+              className="btn btn--primary"
             >
               Create
             </button>
@@ -182,24 +158,4 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
       </div>
     </div>
   )
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  marginBottom: 4,
-  fontSize: 12,
-  color: 'var(--text-secondary)',
-  fontWeight: 500,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'var(--bg-base)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 4,
-  padding: '8px 10px',
-  color: 'var(--text-primary)',
-  fontSize: 13,
-  outline: 'none',
-  boxSizing: 'border-box',
 }

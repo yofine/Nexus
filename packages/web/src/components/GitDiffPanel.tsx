@@ -39,7 +39,7 @@ function DiffHunks({ hunks }: { hunks: string }) {
     <div
       style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: 11,
+        fontSize: 'var(--font-xs)',
         lineHeight: 1.6,
         overflow: 'auto',
         borderTop: '1px solid var(--border-subtle)',
@@ -65,11 +65,11 @@ function DiffHunks({ hunks }: { hunks: string }) {
           <div
             key={i}
             style={{
-              padding: '0 8px',
+              padding: '0 var(--space-md)',
               background: bg,
               color,
               whiteSpace: 'pre',
-              minHeight: 18,
+              minHeight: 'var(--font-xl)',
             }}
           >
             {line}
@@ -97,10 +97,10 @@ function DiffFileItem({ diff }: { diff: FileDiff }) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
+          gap: 'var(--space-sm)',
+          padding: 'var(--space-sm) var(--space-lg)',
           cursor: 'pointer',
-          fontSize: 12,
+          fontSize: 'var(--font-sm)',
           fontFamily: 'var(--font-mono)',
           color: 'var(--text-primary)',
           userSelect: 'none',
@@ -113,11 +113,11 @@ function DiffFileItem({ diff }: { diff: FileDiff }) {
         }}
       >
         {expanded ? (
-          <ChevronDown size={12} color="var(--text-muted)" />
+          <ChevronDown className="icon-xs" style={{ color: 'var(--text-muted)' }} />
         ) : (
-          <ChevronRight size={12} color="var(--text-muted)" />
+          <ChevronRight className="icon-xs" style={{ color: 'var(--text-muted)' }} />
         )}
-        <Icon size={14} color={statusColors[diff.status]} />
+        <Icon className="icon-sm" style={{ color: statusColors[diff.status] }} />
         <span
           style={{
             flex: 1,
@@ -138,7 +138,7 @@ function DiffFileItem({ diff }: { diff: FileDiff }) {
             padding: 2,
             display: 'flex',
             alignItems: 'center',
-            borderRadius: 3,
+            borderRadius: 'var(--radius-sm)',
             flexShrink: 0,
           }}
           onMouseEnter={(e) => {
@@ -148,11 +148,11 @@ function DiffFileItem({ diff }: { diff: FileDiff }) {
             e.currentTarget.style.background = 'none'
           }}
         >
-          <ExternalLink size={11} color="var(--text-muted)" />
+          <ExternalLink className="icon-xs" style={{ color: 'var(--text-muted)' }} />
         </button>
         <span
           style={{
-            fontSize: 10,
+            fontSize: 'var(--font-xs)',
             color: statusColors[diff.status],
             textTransform: 'uppercase',
             fontWeight: 600,
@@ -182,26 +182,18 @@ export function GitDiffPanel({ send }: GitDiffPanelProps) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          padding: '4px 12px',
+          gap: 'var(--space-sm)',
+          padding: 'var(--space-xs) var(--space-lg)',
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1 }}>
+        <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', flex: 1 }}>
           {gitDiffs.length} change{gitDiffs.length !== 1 ? 's' : ''}
         </span>
         <button
           onClick={handleRefresh}
           title="Refresh"
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 4,
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-          }}
+          className="pane-action-btn"
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'var(--bg-overlay)'
           }}
@@ -209,7 +201,7 @@ export function GitDiffPanel({ send }: GitDiffPanelProps) {
             e.currentTarget.style.background = 'none'
           }}
         >
-          <RefreshCw size={13} color="var(--text-muted)" />
+          <RefreshCw className="icon-sm" style={{ color: 'var(--text-muted)' }} />
         </button>
       </div>
 
@@ -223,7 +215,7 @@ export function GitDiffPanel({ send }: GitDiffPanelProps) {
               justifyContent: 'center',
               height: '100%',
               color: 'var(--text-muted)',
-              fontSize: 12,
+              fontSize: 'var(--font-sm)',
             }}
           >
             No changes

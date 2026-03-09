@@ -5,10 +5,9 @@ import {
   X,
   RotateCcw,
   GitBranch,
-  Monitor,
-  Terminal,
   Palette,
 } from 'lucide-react'
+import { AgentIcon } from './AgentIcon'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ClientEvent } from '@/types'
 
@@ -128,7 +127,7 @@ export function CommandPalette({ open, onClose, send, onAddPane }: CommandPalett
               <Item
                 key={pane.id}
                 onSelect={() => runAndClose(() => setActivePaneId(pane.id))}
-                icon={<Monitor size={14} />}
+                icon={<AgentIcon agent={pane.agent} size={14} />}
               >
                 Switch to {pane.name}
               </Item>

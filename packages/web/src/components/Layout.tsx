@@ -89,7 +89,7 @@ export function Layout({ send }: LayoutProps) {
       }}
     >
       {/* Column 1: Sidebar */}
-      <div style={{ width: 48, flexShrink: 0 }}>
+      <div style={{ width: 'var(--sidebar-width)', flexShrink: 0 }}>
         <Sidebar onAddPane={handleOpenAddPane} />
       </div>
 
@@ -109,22 +109,23 @@ export function Layout({ send }: LayoutProps) {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
+            gap: 'var(--space-md)',
+            padding: 'var(--space-md) var(--space-xl)',
             borderBottom: '1px solid var(--border-subtle)',
             background: 'var(--bg-surface)',
             flexShrink: 0,
+            minHeight: 'var(--header-height)',
           }}
         >
-          <Monitor size={14} color="var(--accent-primary)" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+          <Monitor className="icon-sm" style={{ color: 'var(--accent-primary)' }} />
+          <span style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
             {name || 'Nexus'}
           </span>
           <div
             style={{
               marginLeft: 'auto',
-              width: 8,
-              height: 8,
+              width: 'var(--space-md)',
+              height: 'var(--space-md)',
               borderRadius: '50%',
               background:
                 connectionStatus === 'connected'
@@ -157,22 +158,22 @@ export function Layout({ send }: LayoutProps) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                gap: 12,
+                gap: 'var(--space-lg)',
                 color: 'var(--text-muted)',
               }}
             >
-              <Monitor size={32} />
-              <span style={{ fontSize: 14 }}>No agent panes</span>
+              <Monitor className="icon-hero" />
+              <span style={{ fontSize: 'var(--font-lg)' }}>No agent panes</span>
               <button
                 onClick={handleOpenAddPane}
                 style={{
                   background: 'var(--accent-primary)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: 4,
-                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: 'var(--space-md) var(--space-xl)',
                   cursor: 'pointer',
-                  fontSize: 13,
+                  fontSize: 'var(--font-md)',
                 }}
               >
                 Add Pane
@@ -226,15 +227,16 @@ export function Layout({ send }: LayoutProps) {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
+            gap: 'var(--space-md)',
+            padding: 'var(--space-md) var(--space-xl)',
             borderBottom: '1px solid var(--border-subtle)',
             background: 'var(--bg-surface)',
             flexShrink: 0,
+            minHeight: 'var(--header-height)',
           }}
         >
-          <FolderTree size={14} color="var(--text-secondary)" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+          <FolderTree className="icon-sm" style={{ color: 'var(--text-secondary)' }} />
+          <span style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
             Files
           </span>
         </div>

@@ -4,9 +4,9 @@ import {
   ChevronRight,
   RotateCcw,
   X,
-  Circle,
 } from 'lucide-react'
 import { Terminal } from './Terminal'
+import { AgentIcon, getAgentDisplayName, getAgentColor } from './AgentIcon'
 import type { PaneState, ClientEvent } from '@/types'
 
 interface AgentPaneProps {
@@ -53,7 +53,7 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
     <div
       style={{
         border: `1px solid ${isExpanded ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
-        borderRadius: 6,
+        borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -65,111 +65,92 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
       {/* Header */}
       <div
         onClick={onToggle}
+        className="agent-pane-header"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
-          cursor: 'pointer',
           background: isExpanded ? 'var(--bg-elevated)' : 'var(--bg-surface)',
           borderBottom: isExpanded ? '1px solid var(--border-subtle)' : 'none',
-          userSelect: 'none',
         }}
       >
-        {isExpanded ? (
-          <ChevronDown size={14} color="var(--text-secondary)" />
-        ) : (
-          <ChevronRight size={14} color="var(--text-secondary)" />
-        )}
+        <div className="agent-pane-header__main">
+          {isExpanded ? (
+            <ChevronDown className="icon-sm" style={{ color: 'var(--text-secondary)' }} />
+          ) : (
+            <ChevronRight className="icon-sm" style={{ color: 'var(--text-secondary)' }} />
+          )}
 
-        <Circle
-          size={8}
-          fill={statusColors[pane.status] || 'var(--status-idle)'}
-          color={statusColors[pane.status] || 'var(--status-idle)'}
-        />
+          {/* Status dot */}
+          <div style={{
+            width: 'var(--space-md)',
+            height: 'var(--space-md)',
+            borderRadius: '50%',
+            background: statusColors[pane.status] || 'var(--status-idle)',
+            flexShrink: 0,
+          }} />
 
-        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>
-          {pane.name}
-        </span>
+          {/* Agent icon + name */}
+          <AgentIcon agent={pane.agent} size="var(--icon-md)" />
 
-        <span
-          style={{
-            fontSize: 11,
-            color: 'var(--accent-primary)',
-            background: 'var(--accent-subtle)',
-            padding: '1px 6px',
-            borderRadius: 3,
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {pane.agent}
-        </span>
-
-        {pane.workdir && (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            {pane.workdir}
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 'var(--font-md)', whiteSpace: 'nowrap' }}>
+            {pane.name}
           </span>
-        )}
 
-        {!isExpanded && pane.task && (
           <span
             style={{
-              fontSize: 11,
-              color: 'var(--text-secondary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              fontSize: 'var(--font-xs)',
+              color: getAgentColor(pane.agent),
+              background: `${getAgentColor(pane.agent)}1a`,
+              padding: '2px var(--space-sm)',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'var(--font-mono)',
               whiteSpace: 'nowrap',
-              flex: 1,
+              flexShrink: 0,
             }}
           >
-            {pane.task}
+            {getAgentDisplayName(pane.agent)}
           </span>
-        )}
 
-        {/* Meta info (context%, cost) */}
-        {pane.meta.contextUsedPct !== undefined && (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            {pane.meta.contextUsedPct}% ctx
-          </span>
-        )}
-        {pane.meta.costUsd !== undefined && (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            ${pane.meta.costUsd.toFixed(3)}
-          </span>
-        )}
+          {/* Meta info (workdir, context%, cost) */}
+          <div className="agent-pane-header__meta">
+            {pane.workdir && (
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {pane.workdir}
+              </span>
+            )}
+            {pane.meta.contextUsedPct !== undefined && (
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {pane.meta.contextUsedPct}% ctx
+              </span>
+            )}
+            {pane.meta.costUsd !== undefined && (
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                ${pane.meta.costUsd.toFixed(3)}
+              </span>
+            )}
+          </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-          <button
-            onClick={handleRestart}
-            title="Restart"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 4,
-              borderRadius: 4,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <RotateCcw size={13} color="var(--text-muted)" />
-          </button>
-          <button
-            onClick={handleClose}
-            title="Close"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 4,
-              borderRadius: 4,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <X size={13} color="var(--text-muted)" />
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-xs)', flexShrink: 0 }}>
+            <button
+              onClick={handleRestart}
+              title="Restart"
+              className="pane-action-btn"
+            >
+              <RotateCcw className="icon-sm" style={{ color: 'var(--text-muted)' }} />
+            </button>
+            <button
+              onClick={handleClose}
+              title="Close"
+              className="pane-action-btn"
+            >
+              <X className="icon-sm" style={{ color: 'var(--text-muted)' }} />
+            </button>
+          </div>
         </div>
+
+        {!isExpanded && pane.task && (
+          <div className="agent-pane-header__task">
+            {pane.task}
+          </div>
+        )}
       </div>
 
       {/* Terminal body — conditionally rendered; registry buffers output while collapsed */}
