@@ -19,7 +19,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onClose, send, onAddPane }: CommandPaletteProps) {
-  const { panes, activePaneId, setActivePaneId, openDiffTab } = useWorkspaceStore()
+  const { panes, activePaneId, setActivePaneId, openReviewTab } = useWorkspaceStore()
   const [search, setSearch] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -158,7 +158,7 @@ export function CommandPalette({ open, onClose, send, onAddPane }: CommandPalett
           {/* Git */}
           <Command.Group heading={<GroupHeading>Git</GroupHeading>}>
             <Item
-              onSelect={() => runAndClose(() => openDiffTab())}
+              onSelect={() => runAndClose(() => openReviewTab())}
               icon={<GitBranch size={14} />}
             >
               Open Git Diff

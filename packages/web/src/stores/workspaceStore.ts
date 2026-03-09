@@ -3,9 +3,11 @@ import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode
 
 export interface EditorTab {
   id: string
-  type: 'file' | 'diff'
+  type: 'file' | 'review'
   label: string
   filePath?: string
+  paneId?: string   // null/undefined = workspace (shared) review; set = worktree pane review
+  pinned?: boolean
 }
 
 interface WorkspaceStore {
@@ -43,7 +45,7 @@ interface WorkspaceStore {
   removePaneDiffs: (paneId: string) => void
   setDiffViewPaneId: (paneId: string | null) => void
   openFileTab: (path: string) => void
-  openDiffTab: () => void
+  openReviewTab: (paneId?: string, paneName?: string) => void
   closeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
 }
@@ -59,8 +61,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   gitDiffs: [],
   paneDiffs: {},
   diffViewPaneId: null,
-  tabs: [],
-  activeTabId: null,
+  tabs: [{ id: 'review:workspace', type: 'review', label: 'Review', pinned: true }],
+  activeTabId: 'review:workspace',
 
   setWorkspace: (name, description, projectDir, panes) =>
     set((state) => {
@@ -88,6 +90,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   removePane: (paneId) =>
     set((state) => {
       const { [paneId]: _, ...restPaneDiffs } = state.paneDiffs
+      const reviewTabId = `review:${paneId}`
+      const nextTabs = state.tabs.filter((t) => t.id !== reviewTabId)
+      let nextActiveTab = state.activeTabId
+      if (state.activeTabId === reviewTabId) {
+        nextActiveTab = nextTabs.length > 0 ? nextTabs[0].id : null
+      }
       return {
         panes: state.panes.filter((p) => p.id !== paneId),
         activePaneId: state.activePaneId === paneId
@@ -95,6 +103,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
           : state.activePaneId,
         paneDiffs: restPaneDiffs,
         diffViewPaneId: state.diffViewPaneId === paneId ? null : state.diffViewPaneId,
+        tabs: nextTabs,
+        activeTabId: nextActiveTab,
       }
     }),
 
@@ -147,18 +157,31 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       return { tabs: [...state.tabs, tab], activeTabId: tab.id }
     }),
 
-  openDiffTab: () =>
+  openReviewTab: (paneId?: string, paneName?: string) =>
     set((state) => {
-      const existing = state.tabs.find((t) => t.type === 'diff')
+      if (!paneId) {
+        // Open/focus workspace review tab (always exists as pinned)
+        const existing = state.tabs.find((t) => t.id === 'review:workspace')
+        if (existing) {
+          return { activeTabId: existing.id }
+        }
+        const tab: EditorTab = { id: 'review:workspace', type: 'review', label: 'Review', pinned: true }
+        return { tabs: [tab, ...state.tabs], activeTabId: tab.id }
+      }
+      // Open/focus a worktree pane review tab
+      const tabId = `review:${paneId}`
+      const existing = state.tabs.find((t) => t.id === tabId)
       if (existing) {
         return { activeTabId: existing.id }
       }
-      const tab: EditorTab = { id: 'diff', type: 'diff', label: 'Review' }
+      const tab: EditorTab = { id: tabId, type: 'review', label: paneName || 'Review', paneId }
       return { tabs: [...state.tabs, tab], activeTabId: tab.id }
     }),
 
   closeTab: (tabId) =>
     set((state) => {
+      const tab = state.tabs.find((t) => t.id === tabId)
+      if (tab?.pinned) return state // Cannot close pinned tabs
       const idx = state.tabs.findIndex((t) => t.id === tabId)
       const next = state.tabs.filter((t) => t.id !== tabId)
       let nextActive = state.activeTabId

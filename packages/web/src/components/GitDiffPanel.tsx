@@ -15,6 +15,7 @@ import type { ClientEvent, FileDiff } from '@/types'
 
 interface GitDiffPanelProps {
   send: (event: ClientEvent) => void
+  paneId?: string  // undefined = workspace (shared) diffs; set = worktree pane diffs
 }
 
 const statusIcons: Record<string, typeof FilePlus> = {
@@ -169,129 +170,64 @@ function DiffFileItem({ diff }: { diff: FileDiff }) {
   )
 }
 
-export function GitDiffPanel({ send }: GitDiffPanelProps) {
-  const { gitDiffs, panes, paneDiffs, diffViewPaneId, setDiffViewPaneId } = useWorkspaceStore()
+export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
+  const { gitDiffs, panes, paneDiffs } = useWorkspaceStore()
 
-  // Find panes that have worktree isolation and thus per-pane diffs
-  const worktreePanes = useMemo(
-    () => panes.filter((p) => p.isolation === 'worktree'),
-    [panes],
-  )
+  const isWorktree = !!paneId
+  const pane = isWorktree ? panes.find((p) => p.id === paneId) : undefined
 
   // Determine which diffs to show
   const activeDiffs = useMemo(() => {
-    if (diffViewPaneId && paneDiffs[diffViewPaneId]) {
-      return paneDiffs[diffViewPaneId]
+    if (paneId && paneDiffs[paneId]) {
+      return paneDiffs[paneId]
+    }
+    if (paneId) {
+      return [] // worktree pane but no diffs yet
     }
     return gitDiffs
-  }, [diffViewPaneId, paneDiffs, gitDiffs])
+  }, [paneId, paneDiffs, gitDiffs])
 
   const handleRefresh = useCallback(() => {
-    if (diffViewPaneId) {
-      send({ type: 'pane.diff.refresh', paneId: diffViewPaneId })
+    if (paneId) {
+      send({ type: 'pane.diff.refresh', paneId })
     } else {
       send({ type: 'git.refresh' })
     }
-  }, [send, diffViewPaneId])
+  }, [send, paneId])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Pane filter tabs — only show when there are worktree panes */}
-      {worktreePanes.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 1,
-            padding: 'var(--space-xs) var(--space-md)',
-            borderBottom: '1px solid var(--border-subtle)',
-            flexShrink: 0,
-            overflowX: 'auto',
-          }}
-        >
-          <button
-            onClick={() => setDiffViewPaneId(null)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-xs)',
-              padding: '3px var(--space-sm)',
-              fontSize: 'var(--font-xs)',
-              fontFamily: 'var(--font-mono)',
-              background: !diffViewPaneId ? 'var(--accent-subtle)' : 'transparent',
-              color: !diffViewPaneId ? 'var(--accent-primary)' : 'var(--text-secondary)',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Workspace
-            <span style={{
-              fontSize: 'var(--font-xs)',
-              background: 'var(--bg-elevated)',
-              padding: '0 4px',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-muted)',
-            }}>
-              {gitDiffs.length}
-            </span>
-          </button>
-          {worktreePanes.map((pane) => {
-            const diffs = paneDiffs[pane.id] || []
-            const isActive = diffViewPaneId === pane.id
-            return (
-              <button
-                key={pane.id}
-                onClick={() => setDiffViewPaneId(pane.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: '3px var(--space-sm)',
-                  fontSize: 'var(--font-xs)',
-                  fontFamily: 'var(--font-mono)',
-                  background: isActive ? 'var(--accent-subtle)' : 'transparent',
-                  color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <GitBranch size={10} />
-                {pane.name}
-                <span style={{
-                  fontSize: 'var(--font-xs)',
-                  background: 'var(--bg-elevated)',
-                  padding: '0 4px',
-                  borderRadius: 'var(--radius-sm)',
-                  color: diffs.length > 0 ? 'var(--status-warning, var(--status-waiting))' : 'var(--text-muted)',
-                }}>
-                  {diffs.length}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Header with refresh button */}
+      {/* Header with context info + refresh button */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 'var(--space-sm)',
-          padding: 'var(--space-xs) var(--space-lg)',
+          padding: 'var(--space-sm) var(--space-lg)',
           flexShrink: 0,
+          borderBottom: '1px solid var(--border-subtle)',
         }}
       >
+        {isWorktree && pane?.branch && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 'var(--font-xs)',
+              color: 'var(--accent-primary)',
+              fontFamily: 'var(--font-mono)',
+              background: 'var(--accent-subtle)',
+              padding: '2px var(--space-sm)',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            <GitBranch size={11} />
+            {pane.branch.replace('nexus/', '')}
+          </span>
+        )}
         <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', flex: 1 }}>
           {activeDiffs.length} change{activeDiffs.length !== 1 ? 's' : ''}
-          {diffViewPaneId && (
-            <span style={{ marginLeft: 'var(--space-xs)' }}>
-              in {panes.find((p) => p.id === diffViewPaneId)?.name}
-            </span>
-          )}
         </span>
         <button
           onClick={handleRefresh}

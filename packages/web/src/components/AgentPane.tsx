@@ -28,7 +28,7 @@ const statusColors: Record<string, string> = {
 
 export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) {
   const paneDiffs = useWorkspaceStore((s) => s.paneDiffs[pane.id])
-  const { setDiffViewPaneId, openDiffTab } = useWorkspaceStore()
+  const { openReviewTab } = useWorkspaceStore()
   const diffCount = paneDiffs?.length ?? 0
 
   const handleTerminalData = useCallback(
@@ -151,8 +151,7 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
               <span
                 onClick={(e) => {
                   e.stopPropagation()
-                  setDiffViewPaneId(pane.id)
-                  openDiffTab()
+                  openReviewTab(pane.id, pane.name)
                 }}
                 style={{
                   fontSize: 'var(--font-xs)',

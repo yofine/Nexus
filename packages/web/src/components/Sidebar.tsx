@@ -46,7 +46,7 @@ function SidebarButton({ icon, title, onClick, disabled }: SidebarButtonProps) {
 }
 
 export function Sidebar({ onAddPane }: SidebarProps) {
-  const { openDiffTab } = useWorkspaceStore()
+  const { openReviewTab } = useWorkspaceStore()
 
   return (
     <div
@@ -70,7 +70,7 @@ export function Sidebar({ onAddPane }: SidebarProps) {
       <SidebarButton
         icon={<GitBranch className="sidebar-icon" />}
         title="Review Diffs"
-        onClick={openDiffTab}
+        onClick={() => openReviewTab()}
       />
       <SidebarButton
         icon={<Zap className="sidebar-icon sidebar-icon--disabled" />}

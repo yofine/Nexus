@@ -1,4 +1,4 @@
-import { X, File, GitBranch } from 'lucide-react'
+import { X, File, GitBranch, Shield } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { EditorTab } from '@/stores/workspaceStore'
 import { FileViewer } from './FileViewer'
@@ -13,9 +13,11 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
   tab: EditorTab
   isActive: boolean
   onActivate: () => void
-  onClose: (e: React.MouseEvent) => void
+  onClose?: (e: React.MouseEvent) => void
 }) {
-  const Icon = tab.type === 'diff' ? GitBranch : File
+  const Icon = tab.type === 'review'
+    ? (tab.paneId ? GitBranch : Shield)
+    : File
 
   return (
     <div
@@ -44,26 +46,28 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
     >
       <Icon className="icon-xs" style={{ color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
       <span>{tab.label}</span>
-      <button
-        onClick={onClose}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 2,
-          display: 'flex',
-          alignItems: 'center',
-          borderRadius: 'var(--radius-sm)',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--bg-overlay)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'none'
-        }}
-      >
-        <X className="icon-xs" style={{ color: 'var(--text-muted)' }} />
-      </button>
+      {onClose && (
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 2,
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: 'var(--radius-sm)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--bg-overlay)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'none'
+          }}
+        >
+          <X className="icon-xs" style={{ color: 'var(--text-muted)' }} />
+        </button>
+      )}
     </div>
   )
 }
@@ -72,25 +76,6 @@ export function EditorTabs({ send }: EditorTabsProps) {
   const { tabs, activeTabId, setActiveTab, closeTab } = useWorkspaceStore()
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
-
-  if (tabs.length === 0) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          gap: 'var(--space-md)',
-          color: 'var(--text-muted)',
-        }}
-      >
-        <File className="icon-hero" />
-        <span style={{ fontSize: 'var(--font-md)' }}>Open a file or view diffs</span>
-      </div>
-    )
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -110,7 +95,7 @@ export function EditorTabs({ send }: EditorTabsProps) {
             tab={tab}
             isActive={tab.id === activeTabId}
             onActivate={() => setActiveTab(tab.id)}
-            onClose={(e) => {
+            onClose={tab.pinned ? undefined : (e) => {
               e.stopPropagation()
               closeTab(tab.id)
             }}
@@ -120,7 +105,9 @@ export function EditorTabs({ send }: EditorTabsProps) {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        {activeTab?.type === 'diff' && <GitDiffPanel send={send} />}
+        {activeTab?.type === 'review' && (
+          <GitDiffPanel send={send} paneId={activeTab.paneId} />
+        )}
         {activeTab?.type === 'file' && activeTab.filePath && (
           <FileViewer filePath={activeTab.filePath} />
         )}

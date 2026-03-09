@@ -5,23 +5,18 @@ repository:
   path: .
   git: true
 panes:
-  - id: pane-16
-    name: opencode 一号
-    agent: opencode
-    restore: continue
-  - id: pane-17
-    name: opencode 二号
-    agent: opencode
-    restore: manual
-  - id: pane-18
-    name: opencode 三号
-    agent: opencode
-    restore: manual
-  - id: pane-1
-    name: cc
-    agent: claudecode
-    restore: manual
   - id: pane-2
-    name: cc 二号
+    name: cc1
+    agent: claudecode
+    restore: continue
+    isolation: shared
+  - id: pane-3
+    name: cc2
     agent: claudecode
     restore: manual
+    isolation: shared
+  - id: pane-4
+    name: oc1
+    agent: opencode
+    restore: manual
+    isolation: shared

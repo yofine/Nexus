@@ -65,6 +65,15 @@ export class WorkspaceManager {
     this.wsName = wsConfig.name
     this.wsDescription = wsConfig.description || ''
 
+    // Sync paneCounter to avoid id collisions with restored panes
+    for (const p of wsConfig.panes) {
+      const match = p.id.match(/^pane-(\d+)$/)
+      if (match) {
+        const num = parseInt(match[1], 10)
+        if (num >= paneCounter) paneCounter = num
+      }
+    }
+
     // Restore panes from config (skip failures — stale panes from previous sessions)
     let failCount = 0
     for (const paneConfig of wsConfig.panes) {

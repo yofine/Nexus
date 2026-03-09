@@ -150,7 +150,7 @@ export function FileTree() {
   }
 
   return (
-    <div style={{ overflowY: 'auto', overflowX: 'hidden', padding: 'var(--space-xs) 0' }}>
+    <div style={{ overflowY: 'auto', overflowX: 'hidden', padding: 'var(--space-xs) 0', height: '100%' }}>
       {fileTree.map((node) => (
         <FileTreeNode
           key={node.path}

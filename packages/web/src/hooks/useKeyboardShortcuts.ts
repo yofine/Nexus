@@ -63,8 +63,8 @@ export function useKeyboardShortcuts({
       // Cmd/Ctrl+G — open git diff tab
       if (mod && e.key === 'g') {
         e.preventDefault()
-        const { openDiffTab } = useWorkspaceStore.getState()
-        openDiffTab()
+        const { openReviewTab } = useWorkspaceStore.getState()
+        openReviewTab()
         return
       }
     }
