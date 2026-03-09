@@ -2,11 +2,13 @@ import { useCallback } from 'react'
 import {
   ChevronDown,
   ChevronRight,
+  GitBranch,
   RotateCcw,
   X,
 } from 'lucide-react'
 import { Terminal } from './Terminal'
 import { AgentIcon, getAgentDisplayName, getAgentColor } from './AgentIcon'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { PaneState, ClientEvent } from '@/types'
 
 interface AgentPaneProps {
@@ -25,6 +27,10 @@ const statusColors: Record<string, string> = {
 }
 
 export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) {
+  const paneDiffs = useWorkspaceStore((s) => s.paneDiffs[pane.id])
+  const { setDiffViewPaneId, openDiffTab } = useWorkspaceStore()
+  const diffCount = paneDiffs?.length ?? 0
+
   const handleTerminalData = useCallback(
     (data: string) => {
       send({ type: 'terminal.input', paneId: pane.id, data })
@@ -109,8 +115,23 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
             {getAgentDisplayName(pane.agent)}
           </span>
 
-          {/* Meta info (workdir, context%, cost) */}
+          {/* Meta info (branch, workdir, context%, cost, diff count) */}
           <div className="agent-pane-header__meta">
+            {pane.isolation === 'worktree' && pane.branch && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  fontSize: 'var(--font-xs)',
+                  color: 'var(--accent-primary)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                <GitBranch size={11} />
+                {pane.branch.replace('nexus/', '')}
+              </span>
+            )}
             {pane.workdir && (
               <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                 {pane.workdir}
@@ -124,6 +145,23 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
             {pane.meta.costUsd !== undefined && (
               <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                 ${pane.meta.costUsd.toFixed(3)}
+              </span>
+            )}
+            {pane.isolation === 'worktree' && diffCount > 0 && (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDiffViewPaneId(pane.id)
+                  openDiffTab()
+                }}
+                style={{
+                  fontSize: 'var(--font-xs)',
+                  color: 'var(--status-waiting)',
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                }}
+              >
+                {diffCount} file{diffCount !== 1 ? 's' : ''} changed
               </span>
             )}
           </div>

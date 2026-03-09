@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { GitBranch, Share2 } from 'lucide-react'
 import { AgentIcon, getAgentDisplayName } from './AgentIcon'
-import type { ClientEvent, AgentType, RestoreMode } from '@/types'
+import type { ClientEvent, AgentType, RestoreMode, IsolationMode } from '@/types'
 
 interface AddPaneDialogProps {
   isOpen: boolean
@@ -14,6 +15,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
   const [workdir, setWorkdir] = useState('')
   const [task, setTask] = useState('')
   const [restore, setRestore] = useState<RestoreMode>('continue')
+  const [isolation, setIsolation] = useState<IsolationMode>('shared')
 
   if (!isOpen) return null
 
@@ -29,6 +31,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
         workdir: workdir.trim() || undefined,
         task: task.trim() || undefined,
         restore,
+        isolation,
       },
     })
 
@@ -37,6 +40,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
     setWorkdir('')
     setTask('')
     setRestore('continue')
+    setIsolation('shared')
     onClose()
   }
 
@@ -123,6 +127,61 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
                 <option value="restart">Restart</option>
                 <option value="manual">Manual</option>
               </select>
+            </div>
+          </div>
+
+          {/* Isolation Mode */}
+          <div>
+            <label className="form-label">Isolation</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)' }}>
+              <button
+                type="button"
+                onClick={() => setIsolation('shared')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-sm)',
+                  padding: 'var(--space-md)',
+                  background: isolation === 'shared' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                  border: `1px solid ${isolation === 'shared' ? 'var(--accent-primary)' : 'var(--border-default)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)',
+                  textAlign: 'left',
+                }}
+              >
+                <Share2 size={16} style={{ color: isolation === 'shared' ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Shared</div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
+                    Same working directory
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsolation('worktree')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-sm)',
+                  padding: 'var(--space-md)',
+                  background: isolation === 'worktree' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                  border: `1px solid ${isolation === 'worktree' ? 'var(--accent-primary)' : 'var(--border-default)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)',
+                  textAlign: 'left',
+                }}
+              >
+                <GitBranch size={16} style={{ color: isolation === 'worktree' ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Git Worktree</div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
+                    Isolated branch & diff
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
 

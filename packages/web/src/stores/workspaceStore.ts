@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff } from '@/types'
+import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode } from '@/types'
 
 export interface EditorTab {
   id: string
@@ -20,6 +20,10 @@ interface WorkspaceStore {
   fileTree: FileNode[]
   gitDiffs: FileDiff[]
 
+  // Per-pane diffs (worktree isolation)
+  paneDiffs: Record<string, FileDiff[]>
+  diffViewPaneId: string | null // null = show global workspace diffs
+
   // Tab system
   tabs: EditorTab[]
   activeTabId: string | null
@@ -35,6 +39,9 @@ interface WorkspaceStore {
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting') => void
   setFileTree: (tree: FileNode[]) => void
   setGitDiffs: (diffs: FileDiff[]) => void
+  setPaneDiffs: (paneId: string, diffs: FileDiff[]) => void
+  removePaneDiffs: (paneId: string) => void
+  setDiffViewPaneId: (paneId: string | null) => void
   openFileTab: (path: string) => void
   openDiffTab: () => void
   closeTab: (tabId: string) => void
@@ -50,6 +57,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   connectionStatus: 'disconnected',
   fileTree: [],
   gitDiffs: [],
+  paneDiffs: {},
+  diffViewPaneId: null,
   tabs: [],
   activeTabId: null,
 
@@ -77,12 +86,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     }),
 
   removePane: (paneId) =>
-    set((state) => ({
-      panes: state.panes.filter((p) => p.id !== paneId),
-      activePaneId: state.activePaneId === paneId
-        ? (state.panes.find((p) => p.id !== paneId)?.id ?? null)
-        : state.activePaneId,
-    })),
+    set((state) => {
+      const { [paneId]: _, ...restPaneDiffs } = state.paneDiffs
+      return {
+        panes: state.panes.filter((p) => p.id !== paneId),
+        activePaneId: state.activePaneId === paneId
+          ? (state.panes.find((p) => p.id !== paneId)?.id ?? null)
+          : state.activePaneId,
+        paneDiffs: restPaneDiffs,
+        diffViewPaneId: state.diffViewPaneId === paneId ? null : state.diffViewPaneId,
+      }
+    }),
 
   updatePaneStatus: (paneId, status) =>
     set((state) => ({
@@ -105,6 +119,22 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   setFileTree: (fileTree) => set({ fileTree }),
 
   setGitDiffs: (gitDiffs) => set({ gitDiffs }),
+
+  setPaneDiffs: (paneId, diffs) =>
+    set((state) => ({
+      paneDiffs: { ...state.paneDiffs, [paneId]: diffs },
+    })),
+
+  removePaneDiffs: (paneId) =>
+    set((state) => {
+      const { [paneId]: _, ...rest } = state.paneDiffs
+      return {
+        paneDiffs: rest,
+        diffViewPaneId: state.diffViewPaneId === paneId ? null : state.diffViewPaneId,
+      }
+    }),
+
+  setDiffViewPaneId: (diffViewPaneId) => set({ diffViewPaneId }),
 
   openFileTab: (path) =>
     set((state) => {

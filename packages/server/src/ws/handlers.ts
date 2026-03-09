@@ -29,6 +29,14 @@ export function setupWsHandlers(
     }
   }
 
+  // Send initial per-pane diffs for worktree panes
+  const paneDiffs = workspaceManager.getPaneDiffs()
+  for (const [paneId, diffs] of paneDiffs) {
+    if (diffs.length > 0) {
+      send({ type: 'pane.diff', paneId, diffs })
+    }
+  }
+
   // Register event handlers for this client (multi-client safe)
   const cleanup = workspaceManager.onEvents({
     onTerminalData: (paneId, data) => {
@@ -45,6 +53,9 @@ export function setupWsHandlers(
     },
     onPaneRemoved: (paneId) => {
       send({ type: 'pane.removed', paneId })
+    },
+    onPaneDiff: (paneId, diffs) => {
+      send({ type: 'pane.diff', paneId, diffs })
     },
     onFileTree: (tree) => {
       send({ type: 'fs.tree', tree })
@@ -73,15 +84,15 @@ export function setupWsHandlers(
         break
 
       case 'pane.create':
-        try {
-          workspaceManager.createPane(event.config)
-        } catch (err) {
+        workspaceManager.createPane(event.config).catch((err) => {
           console.error('pane.create failed:', err)
-        }
+        })
         break
 
       case 'pane.close':
-        workspaceManager.closePane(event.paneId)
+        workspaceManager.closePane(event.paneId).catch((err) => {
+          console.error('pane.close failed:', err)
+        })
         break
 
       case 'pane.restart':
@@ -90,6 +101,10 @@ export function setupWsHandlers(
 
       case 'git.refresh':
         gitService?.refresh()
+        break
+
+      case 'pane.diff.refresh':
+        workspaceManager.refreshPaneDiff(event.paneId)
         break
 
       case 'workspace.save':

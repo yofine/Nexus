@@ -3,6 +3,7 @@
 export type PaneStatus = 'running' | 'waiting' | 'idle' | 'stopped' | 'error'
 export type RestoreMode = 'continue' | 'restart' | 'manual'
 export type AgentType = 'claudecode' | 'opencode' | 'kimi-cli' | 'qwencode' | '__shell__'
+export type IsolationMode = 'shared' | 'worktree'
 
 export interface PaneMeta {
   model?: string
@@ -19,6 +20,9 @@ export interface PaneConfig {
   workdir?: string
   task?: string
   restore: RestoreMode
+  isolation: IsolationMode
+  worktreePath?: string
+  branch?: string
 }
 
 export interface PaneState {
@@ -28,6 +32,9 @@ export interface PaneState {
   workdir?: string
   task?: string
   restore: RestoreMode
+  isolation: IsolationMode
+  branch?: string
+  worktreePath?: string
   status: PaneStatus
   pid?: number
   meta: PaneMeta
@@ -54,6 +61,7 @@ export type ClientEvent =
   | { type: 'task.dispatch'; tasks: TaskItem[] }
   | { type: 'review.comment'; paneId: string; comment: ReviewComment }
   | { type: 'git.refresh' }
+  | { type: 'pane.diff.refresh'; paneId: string }
   | { type: 'workspace.save' }
 
 // Server → Client
@@ -65,6 +73,7 @@ export type ServerEvent =
   | { type: 'pane.removed'; paneId: string }
   | { type: 'fs.tree'; tree: FileNode[] }
   | { type: 'git.diff'; diff: FileDiff[] }
+  | { type: 'pane.diff'; paneId: string; diffs: FileDiff[] }
   | { type: 'workspace.state'; state: WorkspaceState }
 
 // ─── Supporting Types ───────────────────────────────────────
@@ -75,6 +84,7 @@ export interface PaneCreateConfig {
   workdir?: string
   task?: string
   restore: RestoreMode
+  isolation?: IsolationMode
 }
 
 export interface ReviewComment {
@@ -102,6 +112,7 @@ export interface FileDiff {
   file: string
   status: 'added' | 'modified' | 'deleted' | 'renamed'
   hunks: string
+  paneId?: string
 }
 
 // ─── Config File Types ──────────────────────────────────────

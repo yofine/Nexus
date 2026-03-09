@@ -15,6 +15,7 @@ export function App() {
     setConnectionStatus,
     setFileTree,
     setGitDiffs,
+    setPaneDiffs,
   } = useWorkspaceStore()
 
   const handleMessage = useCallback(
@@ -57,9 +58,13 @@ export function App() {
         case 'git.diff':
           setGitDiffs(event.diff)
           break
+
+        case 'pane.diff':
+          setPaneDiffs(event.paneId, event.diffs)
+          break
       }
     },
-    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitDiffs],
+    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitDiffs, setPaneDiffs],
   )
 
   const { send, status } = useWebSocket({ onMessage: handleMessage })

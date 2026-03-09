@@ -11,6 +11,8 @@ import type {
 } from '../types.ts'
 import { PtyManager } from '../pty/PtyManager.ts'
 import { ConfigManager } from './ConfigManager.ts'
+import { WorktreeManager } from '../git/WorktreeManager.ts'
+import { GitService } from '../git/GitService.ts'
 
 let paneCounter = 0
 
@@ -26,6 +28,7 @@ export interface EventHandlers {
   onTerminalData?: (paneId: string, data: string) => void
   onFileTree?: (tree: FileNode[]) => void
   onGitDiff?: (diffs: FileDiff[]) => void
+  onPaneDiff?: (paneId: string, diffs: FileDiff[]) => void
 }
 
 type ListenerKey = keyof EventHandlers
@@ -34,6 +37,8 @@ export class WorkspaceManager {
   private panes = new Map<string, PaneState>()
   private ptyManager: PtyManager
   private configManager: ConfigManager
+  private worktreeManager: WorktreeManager
+  private perPaneGitServices = new Map<string, GitService>()
   private wsName = ''
   private wsDescription = ''
 
@@ -46,11 +51,13 @@ export class WorkspaceManager {
     onTerminalData: new Set(),
     onFileTree: new Set(),
     onGitDiff: new Set(),
+    onPaneDiff: new Set(),
   }
 
   constructor(configManager: ConfigManager) {
     this.configManager = configManager
     this.ptyManager = new PtyManager(configManager)
+    this.worktreeManager = new WorktreeManager(configManager.getProjectDir())
   }
 
   init(): void {
@@ -88,29 +95,62 @@ export class WorkspaceManager {
     return Array.from(this.panes.values())
   }
 
-  createPane(createConfig: PaneCreateConfig): PaneState {
+  async createPane(createConfig: PaneCreateConfig): Promise<PaneState> {
     const isShell = createConfig.agent === '__shell__'
     const id = isShell ? '__shell__' : nextPaneId()
+    const isolation = createConfig.isolation || 'shared'
+
     const config: PaneConfig = {
       id,
       ...createConfig,
+      isolation,
+    }
+
+    // Create worktree if requested
+    if (isolation === 'worktree' && !isShell) {
+      try {
+        const { worktreePath, branch } = await this.worktreeManager.create(id, createConfig.name)
+        config.worktreePath = worktreePath
+        config.branch = branch
+      } catch (err) {
+        console.error(`Failed to create worktree for pane ${id}:`, err)
+        throw err
+      }
     }
 
     try {
       const pane = this.spawnPane(config)
+
+      // Start per-pane git service for worktree panes
+      if (isolation === 'worktree' && config.worktreePath) {
+        await this.startPaneGitService(id, config.worktreePath)
+      }
+
       // Don't persist the bottom shell pane to workspace config
       if (!isShell) {
         this.persistPaneConfig(config)
       }
       return pane
     } catch (err) {
+      // Clean up worktree on spawn failure
+      if (isolation === 'worktree') {
+        await this.worktreeManager.removeWithBranch(id)
+      }
       console.error(`Failed to create pane ${id}:`, err)
       throw err
     }
   }
 
-  closePane(paneId: string): void {
+  async closePane(paneId: string): Promise<void> {
+    const pane = this.panes.get(paneId)
     this.ptyManager.kill(paneId)
+
+    // Clean up worktree resources
+    if (pane?.isolation === 'worktree') {
+      this.stopPaneGitService(paneId)
+      await this.worktreeManager.remove(paneId)
+    }
+
     this.panes.delete(paneId)
     this.emit('onPaneRemoved', paneId)
     this.removePaneFromConfig(paneId)
@@ -129,6 +169,9 @@ export class WorkspaceManager {
       workdir: existingState.workdir,
       task: existingState.task,
       restore: mode,
+      isolation: existingState.isolation,
+      worktreePath: existingState.worktreePath,
+      branch: existingState.branch,
     }
 
     this.spawnPane(config)
@@ -180,6 +223,24 @@ export class WorkspaceManager {
     this.emit('onGitDiff', diffs)
   }
 
+  async refreshPaneDiff(paneId: string): Promise<void> {
+    const gitService = this.perPaneGitServices.get(paneId)
+    if (gitService) {
+      await gitService.refresh()
+    }
+  }
+
+  /**
+   * Get current per-pane diffs (for initial sync on WS connect).
+   */
+  getPaneDiffs(): Map<string, FileDiff[]> {
+    const result = new Map<string, FileDiff[]>()
+    for (const [paneId, gitService] of this.perPaneGitServices) {
+      result.set(paneId, gitService.getCurrentDiffs())
+    }
+    return result
+  }
+
   // ─── Internal ─────────────────────────────────────────────
 
   private emit<K extends ListenerKey>(key: K, ...args: Parameters<NonNullable<EventHandlers[K]>>): void {
@@ -199,6 +260,9 @@ export class WorkspaceManager {
       workdir: config.workdir,
       task: config.task,
       restore: config.restore,
+      isolation: config.isolation || 'shared',
+      branch: config.branch,
+      worktreePath: config.worktreePath,
       status: 'running',
       pid,
       meta: {},
@@ -232,6 +296,25 @@ export class WorkspaceManager {
     return pane
   }
 
+  private async startPaneGitService(paneId: string, worktreePath: string): Promise<void> {
+    const gitService = new GitService(worktreePath)
+    gitService.onDiffChange((diffs) => {
+      // Tag each diff with the paneId
+      const tagged = diffs.map((d) => ({ ...d, paneId }))
+      this.emit('onPaneDiff', paneId, tagged)
+    })
+    await gitService.start()
+    this.perPaneGitServices.set(paneId, gitService)
+  }
+
+  private stopPaneGitService(paneId: string): void {
+    const gitService = this.perPaneGitServices.get(paneId)
+    if (gitService) {
+      gitService.close()
+      this.perPaneGitServices.delete(paneId)
+    }
+  }
+
   private persistPaneConfig(config: PaneConfig): void {
     const wsConfig = this.configManager.loadWorkspaceConfig()
     if (wsConfig) {
@@ -248,7 +331,13 @@ export class WorkspaceManager {
     }
   }
 
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     this.ptyManager.killAll()
+    // Close per-pane git services
+    for (const [paneId] of this.perPaneGitServices) {
+      this.stopPaneGitService(paneId)
+    }
+    // Clean up worktrees
+    await this.worktreeManager.removeAll()
   }
 }

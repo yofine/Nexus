@@ -129,13 +129,13 @@ export async function startServer(port: number, projectDir: string) {
   }
 
   // Graceful shutdown
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log('\nShutting down...')
     agentsWriter.flush(workspaceManager.getPanes())
     fsWatcher.close()
     gitService.close()
-    workspaceManager.shutdown()
-    fastify.close()
+    await workspaceManager.shutdown()
+    await fastify.close()
     process.exit(0)
   }
 

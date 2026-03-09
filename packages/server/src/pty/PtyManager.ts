@@ -34,9 +34,13 @@ export class PtyManager {
 
     const shell = this.configManager.getShell()
     const projectDir = this.configManager.getProjectDir()
-    const cwd = config.workdir
-      ? path.resolve(projectDir, config.workdir)
+    // Worktree panes use worktreePath as base; shared panes use projectDir
+    const basePath = (config.isolation === 'worktree' && config.worktreePath)
+      ? config.worktreePath
       : projectDir
+    const cwd = config.workdir
+      ? path.resolve(basePath, config.workdir)
+      : basePath
 
     const agentDef = this.configManager.getAgentDefinition(config.agent)
 

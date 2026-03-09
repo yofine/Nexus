@@ -38,22 +38,29 @@ export class AgentsYamlWriter {
 
     const data = {
       updated_at: new Date().toISOString(),
-      panes: visible.map((p) => ({
-        id: p.id,
-        name: p.name,
-        agent: p.agent,
-        pid: p.pid,
-        status: p.status,
-        workdir: p.workdir
-          ? path.resolve(this.projectDir, p.workdir)
-          : this.projectDir,
-        task: p.task || undefined,
-        model: p.meta.model || undefined,
-        context_used_pct: p.meta.contextUsedPct ?? undefined,
-        cost_usd: p.meta.costUsd ?? undefined,
-        session_id: p.meta.sessionId || undefined,
-        started_at: p.startedAt || undefined,
-      })),
+      panes: visible.map((p) => {
+        const basePath = (p.isolation === 'worktree' && p.worktreePath)
+          ? p.worktreePath
+          : this.projectDir
+        return {
+          id: p.id,
+          name: p.name,
+          agent: p.agent,
+          pid: p.pid,
+          status: p.status,
+          isolation: p.isolation || 'shared',
+          branch: p.branch || undefined,
+          workdir: p.workdir
+            ? path.resolve(basePath, p.workdir)
+            : basePath,
+          task: p.task || undefined,
+          model: p.meta.model || undefined,
+          context_used_pct: p.meta.contextUsedPct ?? undefined,
+          cost_usd: p.meta.costUsd ?? undefined,
+          session_id: p.meta.sessionId || undefined,
+          started_at: p.startedAt || undefined,
+        }
+      }),
     }
 
     const filePath = path.join(nexusDir, 'agents.yaml')
