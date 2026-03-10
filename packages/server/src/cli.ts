@@ -9,6 +9,30 @@ delete process.env.CLAUDE_CODE_ENTRYPOINT
 
 const DEFAULT_PORT = 7700
 
+function printUsage() {
+  console.log(`
+  Usage: nexus [command] [directory]
+
+  Commands:
+    start [dir]    Start the Nexus server (default)
+    init  [dir]    Initialize .nexus/ config in a project
+    status [dir]   Show workspace status
+    stop           Stop the running server
+
+  Arguments:
+    dir            Path to the project directory (defaults to cwd)
+
+  Environment:
+    NEXUS_PORT     Server port (default: ${DEFAULT_PORT})
+
+  Examples:
+    nexus                        # Start in current directory
+    nexus ~/projects/my-app      # Start with a specific project
+    nexus start ~/projects/app   # Explicit start command
+    nexus init .                 # Initialize config in cwd
+`.trimEnd())
+}
+
 function findProjectRoot(startDir: string): string {
   // Walk up from startDir, prefer the highest-level match
   // (monorepo root, not a nested package)
@@ -30,14 +54,57 @@ function findProjectRoot(startDir: string): string {
   return bestMatch
 }
 
+function resolveProjectDir(dirArg?: string): string {
+  if (process.env.NEXUS_PROJECT_DIR) {
+    return path.resolve(process.env.NEXUS_PROJECT_DIR)
+  }
+  if (dirArg) {
+    const resolved = path.resolve(dirArg)
+    if (!fs.existsSync(resolved)) {
+      console.error(`Error: directory does not exist: ${resolved}`)
+      process.exit(1)
+    }
+    if (!fs.statSync(resolved).isDirectory()) {
+      console.error(`Error: not a directory: ${resolved}`)
+      process.exit(1)
+    }
+    return resolved
+  }
+  return findProjectRoot(process.cwd())
+}
+
+const COMMANDS = new Set(['start', 'init', 'status', 'stop', 'help'])
+
 async function main() {
   const args = process.argv.slice(2)
-  const command = args[0] || 'start'
-  const projectDir = process.env.NEXUS_PROJECT_DIR || findProjectRoot(process.cwd())
+
+  // Parse command and directory argument
+  // Support: nexus <dir>, nexus <cmd> <dir>, nexus <cmd>
+  let command: string
+  let dirArg: string | undefined
+
+  if (args.length === 0) {
+    command = 'start'
+  } else if (args[0] === '--help' || args[0] === '-h') {
+    command = 'help'
+  } else if (COMMANDS.has(args[0])) {
+    command = args[0]
+    dirArg = args[1]
+  } else {
+    // First arg is not a known command — treat it as a directory
+    command = 'start'
+    dirArg = args[0]
+  }
+
+  if (command === 'help') {
+    printUsage()
+    return
+  }
+
+  const projectDir = resolveProjectDir(dirArg)
 
   switch (command) {
-    case 'start':
-    case undefined: {
+    case 'start': {
       const port = parseInt(process.env.NEXUS_PORT || String(DEFAULT_PORT), 10)
       await startServer(port, projectDir)
       break
@@ -69,7 +136,6 @@ async function main() {
     }
 
     case 'stop': {
-      // Send shutdown signal to running server
       try {
         const port = parseInt(process.env.NEXUS_PORT || String(DEFAULT_PORT), 10)
         const res = await fetch(`http://localhost:${port}/api/health`)
@@ -84,8 +150,8 @@ async function main() {
     }
 
     default:
-      console.log(`Unknown command: ${command}`)
-      console.log('Usage: nexus [start|init|status|stop]')
+      console.error(`Unknown command: ${command}`)
+      printUsage()
       process.exit(1)
   }
 }

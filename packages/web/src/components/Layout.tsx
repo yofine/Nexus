@@ -240,7 +240,7 @@ export function Layout({ send }: LayoutProps) {
             Files
           </span>
         </div>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
           <FileTree />
         </div>
       </div>
