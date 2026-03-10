@@ -103,6 +103,30 @@ export function setupWsHandlers(
         gitService?.refresh()
         break
 
+      case 'git.accept':
+        gitService?.acceptFile(event.file).catch((err) => {
+          console.error('git.accept failed:', err)
+        })
+        break
+
+      case 'git.accept.all':
+        gitService?.acceptAll().catch((err) => {
+          console.error('git.accept.all failed:', err)
+        })
+        break
+
+      case 'git.discard':
+        gitService?.discardFile(event.file).catch((err) => {
+          console.error('git.discard failed:', err)
+        })
+        break
+
+      case 'git.discard.all':
+        gitService?.discardAll().catch((err) => {
+          console.error('git.discard.all failed:', err)
+        })
+        break
+
       case 'pane.diff.refresh':
         workspaceManager.refreshPaneDiff(event.paneId)
         break

@@ -138,26 +138,24 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           </div>
 
           {/* YOLO Mode */}
-          {agent === 'claudecode' && (
-            <div className="form-field">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Zap size={14} style={{ color: yolo ? 'var(--accent)' : 'var(--text-muted)' }} />
-                YOLO Mode
-              </label>
-              <button
-                type="button"
-                onClick={() => setYolo(!yolo)}
-                className={`isolation-btn${yolo ? ' isolation-btn--active' : ''}`}
-                style={{ width: '100%' }}
-              >
-                <Zap size={16} className="isolation-btn__icon" />
-                <div className="isolation-btn__text">
-                  <div className="isolation-btn__label">{yolo ? 'Enabled' : 'Disabled'}</div>
-                  <div className="isolation-btn__desc">Skip all permission prompts (--dangerously-skip-permissions)</div>
-                </div>
-              </button>
-            </div>
-          )}
+          <div className="form-field">
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={14} style={{ color: yolo ? 'var(--accent)' : 'var(--text-muted)' }} />
+              YOLO Mode
+            </label>
+            <button
+              type="button"
+              onClick={() => setYolo(!yolo)}
+              className={`isolation-btn${yolo ? ' isolation-btn--active' : ''}`}
+              style={{ width: '100%' }}
+            >
+              <Zap size={16} className="isolation-btn__icon" />
+              <div className="isolation-btn__text">
+                <div className="isolation-btn__label">{yolo ? 'Enabled' : 'Disabled'}</div>
+                <div className="isolation-btn__desc">Skip all permission prompts</div>
+              </div>
+            </button>
+          </div>
 
           {/* Task */}
           <div className="form-field">

@@ -28,6 +28,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     opencode: {
       bin: 'opencode',
       continue_flag: '--continue',
+      yolo_flag: '--yolo',
       statusline: false,
       env: {},
     },
