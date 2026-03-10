@@ -704,6 +704,123 @@ body {
 }
 
 /* ── File tree node ── */
+/* ── Activity Map Animations ── */
+
+/* Agent cursor dot (next to active file) */
+.agent-cursor-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--cursor-color) 20%, transparent);
+  box-shadow: 0 0 6px var(--cursor-color);
+  animation: cursorBreathe 2s ease-in-out infinite;
+}
+
+/* Agent cursor in summary bar */
+.agent-cursor-breathing {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cursor-color);
+  box-shadow: 0 0 6px var(--cursor-color);
+  animation: cursorBreathe 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes cursorBreathe {
+  0%, 100% { box-shadow: 0 0 4px var(--cursor-color); opacity: 0.8; }
+  50% { box-shadow: 0 0 12px var(--cursor-color), 0 0 20px var(--cursor-color); opacity: 1; }
+}
+
+/* File node hit highlight */
+.file-active-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--glow-color) 8%, transparent);
+  border-left: 2px solid var(--glow-color);
+  pointer-events: none;
+  animation: fileGlowPulse 2s ease-in-out infinite;
+}
+
+@keyframes fileGlowPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* New file appearing */
+.activity-file-node--new {
+  animation: fileSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fileSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* New timeline entry */
+.activity-timeline-entry--new {
+  animation: timelineSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes timelineSlideIn {
+  from { opacity: 0; transform: translateY(-6px); background: var(--accent-subtle); }
+  to { opacity: 1; transform: translateY(0); background: transparent; }
+}
+
+/* Empty state orbiting animation */
+.activity-empty-orbit {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.orbit-ring {
+  position: absolute;
+  inset: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+}
+
+.orbit-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  margin: -4px 0 0 -4px;
+}
+
+.orbit-dot--1 {
+  background: #D97757;
+  box-shadow: 0 0 8px #D97757;
+  animation: orbit 3s linear infinite;
+}
+
+.orbit-dot--2 {
+  background: #58A6FF;
+  box-shadow: 0 0 8px #58A6FF;
+  animation: orbit 3s linear infinite;
+  animation-delay: -1s;
+}
+
+.orbit-dot--3 {
+  background: #3FB950;
+  box-shadow: 0 0 8px #3FB950;
+  animation: orbit 3s linear infinite;
+  animation-delay: -2s;
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(28px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(28px) rotate(-360deg); }
+}
+
+/* ── File tree node ── */
 .file-tree-node {
   display: flex;
   align-items: center;

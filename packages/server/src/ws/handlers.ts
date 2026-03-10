@@ -54,6 +54,9 @@ export function setupWsHandlers(
     onPaneRemoved: (paneId) => {
       send({ type: 'pane.removed', paneId })
     },
+    onPaneActivity: (paneId, activity) => {
+      send({ type: 'pane.activity', paneId, activity })
+    },
     onPaneDiff: (paneId, diffs) => {
       send({ type: 'pane.diff', paneId, diffs })
     },

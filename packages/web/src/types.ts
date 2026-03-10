@@ -13,6 +13,14 @@ export interface PaneMeta {
   cwd?: string
 }
 
+export type FileAction = 'read' | 'edit' | 'write' | 'create' | 'delete' | 'bash'
+
+export interface FileActivity {
+  file: string
+  action: FileAction
+  timestamp: number
+}
+
 export interface PaneState {
   id: string
   name: string
@@ -67,6 +75,7 @@ export type ServerEvent =
   | { type: 'fs.tree'; tree: FileNode[] }
   | { type: 'git.diff'; diff: FileDiff[] }
   | { type: 'pane.diff'; paneId: string; diffs: FileDiff[] }
+  | { type: 'pane.activity'; paneId: string; activity: FileActivity }
   | { type: 'workspace.state'; state: WorkspaceState }
 
 // ─── Supporting Types ───────────────────────────────────────

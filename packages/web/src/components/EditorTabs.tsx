@@ -1,8 +1,9 @@
-import { X, File, GitBranch, Shield } from 'lucide-react'
+import { X, File, GitBranch, Shield, Activity } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { EditorTab } from '@/stores/workspaceStore'
 import { FileViewer } from './FileViewer'
 import { GitDiffPanel } from './GitDiffPanel'
+import { ActivityMap } from './ActivityMap'
 import type { ClientEvent } from '@/types'
 
 interface EditorTabsProps {
@@ -15,9 +16,11 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
   onActivate: () => void
   onClose?: (e: React.MouseEvent) => void
 }) {
-  const Icon = tab.type === 'review'
-    ? (tab.paneId ? GitBranch : Shield)
-    : File
+  const Icon = tab.type === 'activity'
+    ? Activity
+    : tab.type === 'review'
+      ? (tab.paneId ? GitBranch : Shield)
+      : File
 
   return (
     <div
@@ -105,6 +108,9 @@ export function EditorTabs({ send }: EditorTabsProps) {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+        {activeTab?.type === 'activity' && (
+          <ActivityMap />
+        )}
         {activeTab?.type === 'review' && (
           <GitDiffPanel send={send} paneId={activeTab.paneId} />
         )}
