@@ -1,39 +1,74 @@
 # Nexus
 
-Nexus 是一个本地 Web 控制台，用于在单个代码库中并行管理多个 CLI AI Agent 实例。
+Nexus 是一个本地 Web 控制台，用于在单个浏览器界面中并行管理多个 CLI AI Agent 实例的协作。
 
 ## 功能特性
 
 ### 🖥️ 多 Agent 并行管理
-- 同时运行多个 AI Agent（Claude、OpenCode、Kimi、Qwen 等）
-- 每个 Agent 拥有独立的终端面板，互不干扰
-- 支持创建、关闭、重启 Agent 进程
-- 实时显示 Agent 运行状态（运行中/等待中/空闲/错误）
+- 支持多种 Agent：Claude Code、OpenCode、Aider、Codex、Gemini
+- 每个 Agent 拥有独立的终端面板，支持折叠/展开
+- 创建、关闭、重启 Agent 进程
+- 实时状态指示（运行中/等待中/空闲/已停止/错误）
+- 底部浮动 Shell 终端，随时可用
 
-### 📝 任务与配置
-- 基于 YAML 的配置驱动，支持全局和项目级配置
-- 为每个 Agent 分配独立的工作目录和任务描述
-- 支持会话恢复模式（继续/重启/手动/无）
-- 批量任务分发和广播消息功能
+### 🔀 Git Worktree 隔离
+- 每个 Agent 可选择独立的 Git Worktree 工作
+- 各 Agent 在独立分支上并行开发，互不冲突
+- 面板头部显示分支名和文件变更数
+
+### 📊 Agent 元数据监控
+- 自动解析 Claude Code statusline，提取运行时信息
+- 实时显示：模型名称、上下文使用率、累计费用、会话 ID
+- 所有 Agent 状态写入 `.nexus/agents.yaml`，Agent 间可互相感知
 
 ### 📁 文件与代码查看
-- 实时文件树展示，自动监听文件变化
-- 内置文件查看器，支持浏览源代码
+- 实时文件树，自动监听文件变化（chokidar）
+- 内置代码查看器，Shiki 语法高亮
 - Git Diff 面板，查看仓库级别的代码变更
-- 代码审查评论可直接发送给指定 Agent
+
+### ⌨️ 快捷键与命令面板
+- `Cmd/Ctrl+K` 打开命令面板，快速执行操作
+- `Cmd/Ctrl+N` 新建 Agent 面板
+- `Cmd/Ctrl+1-9` 快速切换面板
+- `Cmd/Ctrl+G` 打开 Git Diff
+- 命令面板内切换主题
 
 ### 🎨 界面与主题
-- 四栏布局：侧边栏、Agent 手风琴区、Diff & CR 面板、文件查看器
+- 四栏可调布局：侧边栏 / Agent 面板区 / 编辑器区 / 文件树
 - 7 套内置主题：Dark IDE、GitHub Dark、Dracula、Tokyo Night、Catppuccin、Nord、Light IDE
-- 基于 CSS Variables 的主题系统，易于扩展
-- 响应式折叠卡片设计，高效利用屏幕空间
+- 响应式缩放适配大屏幕
 
-### 💾 历史与恢复
-- 三级恢复机制：Agent 自身恢复 → Nexus 历史回放 → 手动恢复
-- 终端历史自动存档，支持只读回溯
-- 自动记录会话 ID、模型信息、上下文使用率、费用统计
+### 📝 任务与配置
+- YAML 配置驱动，支持全局（`~/.nexus/config.yaml`）和项目级配置
+- 为每个 Agent 分配独立的工作目录和任务描述
+- 会话恢复模式：继续（`--continue`）/ 重启 / 手动
 
-## 快速开始
+## 安装与使用
+
+```bash
+# 全局安装
+npm install -g nexus-console
+
+# 在项目目录中启动
+nexus
+
+# 指定项目路径启动
+nexus ~/projects/my-app
+
+# 初始化项目配置
+nexus init ~/projects/my-app
+
+# 查看工作区状态
+nexus status
+
+# 停止服务
+nexus stop
+
+# 自定义端口
+NEXUS_PORT=8080 nexus
+```
+
+### 从源码开发
 
 ```bash
 # 安装依赖
