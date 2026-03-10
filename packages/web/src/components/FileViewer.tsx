@@ -79,7 +79,7 @@ export function FileViewer({ filePath }: FileViewerProps) {
   }, [filePath])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Path bar */}
       <div
         style={{
@@ -100,7 +100,7 @@ export function FileViewer({ filePath }: FileViewerProps) {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', background: 'var(--bg-base)' }}>
+      <div style={{ flex: 1, overflow: 'auto', minHeight: 0, background: 'var(--bg-base)' }}>
         {loading && (
           <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>
             Loading...

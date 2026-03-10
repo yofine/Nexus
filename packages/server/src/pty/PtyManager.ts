@@ -1,4 +1,5 @@
 import * as pty from 'node-pty'
+import fs from 'node:fs'
 import path from 'node:path'
 import type { PaneConfig, PaneStatus, PaneMeta, AgentDefinition } from '../types.ts'
 import { StatuslineParser } from './StatuslineParser.ts'
@@ -38,9 +39,15 @@ export class PtyManager {
     const basePath = (config.isolation === 'worktree' && config.worktreePath)
       ? config.worktreePath
       : projectDir
-    const cwd = config.workdir
+    let cwd = config.workdir
       ? path.resolve(basePath, config.workdir)
       : basePath
+
+    // Validate cwd exists — posix_spawnp fails if cwd is invalid
+    if (!fs.existsSync(cwd)) {
+      console.warn(`[PTY] cwd does not exist: ${cwd}, falling back to ${projectDir}`)
+      cwd = fs.existsSync(projectDir) ? projectDir : (process.env.HOME || '/')
+    }
 
     const agentDef = this.configManager.getAgentDefinition(config.agent)
 

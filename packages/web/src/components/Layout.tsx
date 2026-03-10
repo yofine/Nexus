@@ -83,7 +83,7 @@ export function Layout({ send }: LayoutProps) {
     <div
       style={{
         display: 'flex',
-        height: '100vh',
+        height: 'calc(100vh - var(--header-height))',
         width: '100vw',
         overflow: 'hidden',
       }}
@@ -98,7 +98,7 @@ export function Layout({ send }: LayoutProps) {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
+          height: '100%',
           overflow: 'hidden',
           width: widths.agents,
           flexShrink: 0,
@@ -201,7 +201,7 @@ export function Layout({ send }: LayoutProps) {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
+          height: '100%',
           overflow: 'hidden',
           flex: 1,
           minWidth: 300,
@@ -218,7 +218,7 @@ export function Layout({ send }: LayoutProps) {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
+          height: '100%',
           width: widths.files,
           flexShrink: 0,
         }}
