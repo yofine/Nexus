@@ -21,6 +21,7 @@ export interface PaneConfig {
   task?: string
   restore: RestoreMode
   isolation: IsolationMode
+  yolo: boolean
   worktreePath?: string
   branch?: string
 }
@@ -33,6 +34,7 @@ export interface PaneState {
   task?: string
   restore: RestoreMode
   isolation: IsolationMode
+  yolo: boolean
   branch?: string
   worktreePath?: string
   status: PaneStatus
@@ -85,6 +87,7 @@ export interface PaneCreateConfig {
   task?: string
   restore: RestoreMode
   isolation?: IsolationMode
+  yolo?: boolean
 }
 
 export interface ReviewComment {
@@ -132,6 +135,7 @@ export interface GlobalConfig {
 export interface AgentDefinition {
   bin: string
   continue_flag: string
+  yolo_flag?: string
   statusline: boolean
   env?: Record<string, string>
 }

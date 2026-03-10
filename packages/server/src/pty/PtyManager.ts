@@ -151,6 +151,11 @@ export class PtyManager {
       cmd += ` ${agentDef.continue_flag}`
     }
 
+    // Add yolo flag if enabled
+    if (config.yolo && agentDef.yolo_flag) {
+      cmd += ` ${agentDef.yolo_flag}`
+    }
+
     // Send the command to start the agent
     entry.pty.write(cmd + '\r')
 

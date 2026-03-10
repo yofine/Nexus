@@ -21,6 +21,7 @@ export interface PaneState {
   task?: string
   restore: RestoreMode
   isolation: IsolationMode
+  yolo?: boolean
   branch?: string
   worktreePath?: string
   status: PaneStatus
@@ -73,6 +74,7 @@ export interface PaneCreateConfig {
   task?: string
   restore: RestoreMode
   isolation?: IsolationMode
+  yolo?: boolean
 }
 
 export interface ReviewComment {

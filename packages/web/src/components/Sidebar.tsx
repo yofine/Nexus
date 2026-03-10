@@ -1,5 +1,4 @@
-import { Plus, Zap, ClipboardList, Settings, GitBranch } from 'lucide-react'
-import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { Plus, Zap, ClipboardList, Settings } from 'lucide-react'
 
 interface SidebarProps {
   onAddPane: () => void
@@ -46,8 +45,6 @@ function SidebarButton({ icon, title, onClick, disabled }: SidebarButtonProps) {
 }
 
 export function Sidebar({ onAddPane }: SidebarProps) {
-  const { openReviewTab } = useWorkspaceStore()
-
   return (
     <div
       style={{
@@ -66,11 +63,6 @@ export function Sidebar({ onAddPane }: SidebarProps) {
         icon={<Plus className="sidebar-icon" />}
         title="Add Pane"
         onClick={onAddPane}
-      />
-      <SidebarButton
-        icon={<GitBranch className="sidebar-icon" />}
-        title="Review Diffs"
-        onClick={() => openReviewTab()}
       />
       <SidebarButton
         icon={<Zap className="sidebar-icon sidebar-icon--disabled" />}
