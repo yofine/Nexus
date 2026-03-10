@@ -90,7 +90,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           <div>
             <label className="form-label">Agent</label>
             <div className="agent-selector-grid">
-              {(['claudecode', 'opencode', 'aider', 'codex', 'gemini'] as const).map((a) => (
+              {(['claudecode', 'opencode', 'qwencode'] as const).map((a) => (
                 <button
                   key={a}
                   type="button"

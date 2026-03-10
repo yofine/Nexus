@@ -20,3 +20,15 @@ panes:
     agent: opencode
     restore: manual
     isolation: shared
+  - id: pane-5
+    name: Agent Pane 展示优化
+    agent: claudecode
+    restore: manual
+    isolation: worktree
+    worktreePath: /root/workspace/Nexus/.nexus/worktrees/pane-5
+    branch: nexus/pane-5-agent-pane-展示优化
+  - id: pane-6
+    name: chore
+    agent: opencode
+    restore: manual
+    isolation: shared
