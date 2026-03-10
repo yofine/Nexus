@@ -82,8 +82,12 @@ export class ConfigManager {
     const configPath = path.join(this.projectDir, '.nexus', 'config.yaml')
     if (fs.existsSync(configPath)) {
       const content = fs.readFileSync(configPath, 'utf-8')
-      this.workspaceConfig = yaml.load(content) as WorkspaceConfig
-      return this.workspaceConfig
+      const parsed = yaml.load(content) as WorkspaceConfig | null
+      if (parsed) {
+        if (!Array.isArray(parsed.panes)) parsed.panes = []
+        this.workspaceConfig = parsed
+        return this.workspaceConfig
+      }
     }
 
     return null

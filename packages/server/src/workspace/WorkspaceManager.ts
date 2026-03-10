@@ -64,6 +64,7 @@ export class WorkspaceManager {
     const wsConfig = this.configManager.initWorkspace()
     this.wsName = wsConfig.name
     this.wsDescription = wsConfig.description || ''
+    if (!Array.isArray(wsConfig.panes)) wsConfig.panes = []
 
     // Sync paneCounter to avoid id collisions with restored panes
     for (const p of wsConfig.panes) {
