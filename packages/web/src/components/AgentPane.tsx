@@ -190,16 +190,20 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
         )}
       </div>
 
-      {/* Terminal body — conditionally rendered; registry buffers output while collapsed */}
-      {isExpanded && (
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <Terminal
-            paneId={pane.id}
-            onData={handleTerminalData}
-            onResize={handleTerminalResize}
-          />
-        </div>
-      )}
+      {/* Terminal body — always mounted to keep xterm instance alive and cols in sync */}
+      <div style={{
+        flex: isExpanded ? 1 : 0,
+        minHeight: 0,
+        height: isExpanded ? undefined : 0,
+        overflow: 'hidden',
+        visibility: isExpanded ? 'visible' : 'hidden',
+      }}>
+        <Terminal
+          paneId={pane.id}
+          onData={handleTerminalData}
+          onResize={handleTerminalResize}
+        />
+      </div>
     </div>
   )
 }

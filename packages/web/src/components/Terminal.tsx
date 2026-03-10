@@ -50,10 +50,12 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
     term.loadAddon(webLinksAddon)
     term.open(containerRef.current)
 
-    // Initial fit
+    // Initial fit — only if container is visible (not collapsed)
     requestAnimationFrame(() => {
-      fitAddon.fit()
-      onResizeRef.current(term.cols, term.rows)
+      if (containerRef.current && containerRef.current.clientHeight > 0) {
+        fitAddon.fit()
+        onResizeRef.current(term.cols, term.rows)
+      }
     })
 
     // Forward keyboard input to server

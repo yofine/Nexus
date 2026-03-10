@@ -71,8 +71,8 @@ export class PtyManager {
 
     const term = pty.spawn(shell, [], {
       name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
+      cols: 80,
+      rows: 24,
       cwd,
       env,
     })
