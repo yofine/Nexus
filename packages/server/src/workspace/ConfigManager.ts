@@ -21,12 +21,14 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     claudecode: {
       bin: 'claude',
       continue_flag: '--continue',
+      yolo_flag: '--dangerously-skip-permissions',
       statusline: true,
       env: {},
     },
     opencode: {
       bin: 'opencode',
       continue_flag: '--continue',
+      yolo_flag: '--yolo',
       statusline: false,
       env: {},
     },
@@ -48,12 +50,21 @@ export class ConfigManager {
     if (fs.existsSync(GLOBAL_CONFIG_PATH)) {
       const content = fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')
       this.globalConfig = yaml.load(content) as GlobalConfig
-      // Merge in any default agents missing from the saved config
+      // Merge in any default agents or missing fields from the saved config
       let updated = false
       for (const [key, def] of Object.entries(DEFAULT_GLOBAL_CONFIG.agents)) {
         if (!this.globalConfig.agents[key]) {
           this.globalConfig.agents[key] = def
           updated = true
+        } else {
+          // Merge missing fields from defaults into existing agent definition
+          const existing = this.globalConfig.agents[key]
+          for (const [field, value] of Object.entries(def)) {
+            if (!(field in existing)) {
+              (existing as Record<string, unknown>)[field] = value
+              updated = true
+            }
+          }
         }
       }
       if (updated) {

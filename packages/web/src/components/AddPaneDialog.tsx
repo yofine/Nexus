@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GitBranch, Share2 } from 'lucide-react'
+import { GitBranch, Share2, Zap } from 'lucide-react'
 import { AgentIcon, getAgentDisplayName } from './AgentIcon'
 import type { ClientEvent, AgentType, RestoreMode, IsolationMode } from '@/types'
 
@@ -16,6 +16,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
   const [task, setTask] = useState('')
   const [restore, setRestore] = useState<RestoreMode>('continue')
   const [isolation, setIsolation] = useState<IsolationMode>('shared')
+  const [yolo, setYolo] = useState(false)
 
   if (!isOpen) return null
 
@@ -32,6 +33,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
         task: task.trim() || undefined,
         restore,
         isolation,
+        yolo: yolo || undefined,
       },
     })
 
@@ -41,39 +43,20 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
     setTask('')
     setRestore('continue')
     setIsolation('shared')
+    setYolo(false)
     onClose()
   }
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="add-pane-dialog">
-        <h2
-          style={{
-            margin: '0 0 var(--space-xl) 0',
-            fontSize: 'var(--font-xl)',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-          }}
-        >
-          Add Pane
-        </h2>
+  const agents: AgentType[] = ['claudecode', 'opencode', 'qwencode']
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
+  return (
+    <div className="dialog-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="add-pane-dialog">
+        <h2 className="dialog-title">Add Pane</h2>
+
+        <form onSubmit={handleSubmit} className="dialog-form">
           {/* Name */}
-          <div>
+          <div className="form-field">
             <label className="form-label">Name</label>
             <input
               type="text"
@@ -87,14 +70,14 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           </div>
 
           {/* Agent Type */}
-          <div>
+          <div className="form-field">
             <label className="form-label">Agent</label>
             <div className="agent-selector-grid">
-              {(['claudecode', 'opencode', 'aider', 'codex', 'gemini'] as const).map((a) => (
+              {agents.map((a) => (
                 <button
                   key={a}
                   type="button"
-                  onClick={() => setAgent(a as AgentType)}
+                  onClick={() => setAgent(a)}
                   className={`agent-selector-btn${agent === a ? ' agent-selector-btn--active' : ''}`}
                 >
                   <AgentIcon agent={a} size="var(--icon-md)" />
@@ -104,10 +87,10 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
             </div>
           </div>
 
-          {/* Working Directory + Restore Mode side by side on large screens */}
+          {/* Working Directory + Restore Mode */}
           <div className="form-row-pair">
-            <div style={{ flex: 1 }}>
-              <label className="form-label">Working Directory (optional)</label>
+            <div className="form-field" style={{ flex: 1, minWidth: 0 }}>
+              <label className="form-label">Work Directory</label>
               <input
                 type="text"
                 value={workdir}
@@ -116,14 +99,14 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
                 className="form-input"
               />
             </div>
-            <div style={{ flex: 0, minWidth: 160 }}>
+            <div className="form-field" style={{ width: 180, flexShrink: 0 }}>
               <label className="form-label">Restore Mode</label>
               <select
                 value={restore}
                 onChange={(e) => setRestore(e.target.value as RestoreMode)}
-                className="form-input"
+                className="form-input form-select"
               >
-                <option value="continue">Continue (--continue)</option>
+                <option value="continue">Continue</option>
                 <option value="restart">Restart</option>
                 <option value="manual">Manual</option>
               </select>
@@ -131,63 +114,52 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           </div>
 
           {/* Isolation Mode */}
-          <div>
+          <div className="form-field">
             <label className="form-label">Isolation</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)' }}>
-              <button
-                type="button"
-                onClick={() => setIsolation('shared')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-sm)',
-                  padding: 'var(--space-md)',
-                  background: isolation === 'shared' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-                  border: `1px solid ${isolation === 'shared' ? 'var(--accent-primary)' : 'var(--border-default)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  color: 'var(--text-primary)',
-                  textAlign: 'left',
-                }}
-              >
-                <Share2 size={16} style={{ color: isolation === 'shared' ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Shared</div>
-                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-                    Same working directory
+            <div className="isolation-grid">
+              {([
+                { value: 'shared' as IsolationMode, icon: Share2, label: 'Shared', desc: 'Same working directory' },
+                { value: 'worktree' as IsolationMode, icon: GitBranch, label: 'Git Worktree', desc: 'Isolated branch & diff' },
+              ] as const).map(({ value, icon: Icon, label, desc }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setIsolation(value)}
+                  className={`isolation-btn${isolation === value ? ' isolation-btn--active' : ''}`}
+                >
+                  <Icon size={16} className="isolation-btn__icon" />
+                  <div className="isolation-btn__text">
+                    <div className="isolation-btn__label">{label}</div>
+                    <div className="isolation-btn__desc">{desc}</div>
                   </div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsolation('worktree')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-sm)',
-                  padding: 'var(--space-md)',
-                  background: isolation === 'worktree' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-                  border: `1px solid ${isolation === 'worktree' ? 'var(--accent-primary)' : 'var(--border-default)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  color: 'var(--text-primary)',
-                  textAlign: 'left',
-                }}
-              >
-                <GitBranch size={16} style={{ color: isolation === 'worktree' ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Git Worktree</div>
-                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-                    Isolated branch & diff
-                  </div>
-                </div>
-              </button>
+                </button>
+              ))}
             </div>
           </div>
 
+          {/* YOLO Mode */}
+          <div className="form-field">
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={14} style={{ color: yolo ? 'var(--accent)' : 'var(--text-muted)' }} />
+              YOLO Mode
+            </label>
+            <button
+              type="button"
+              onClick={() => setYolo(!yolo)}
+              className={`isolation-btn${yolo ? ' isolation-btn--active' : ''}`}
+              style={{ width: '100%' }}
+            >
+              <Zap size={16} className="isolation-btn__icon" />
+              <div className="isolation-btn__text">
+                <div className="isolation-btn__label">{yolo ? 'Enabled' : 'Disabled'}</div>
+                <div className="isolation-btn__desc">Skip all permission prompts</div>
+              </div>
+            </button>
+          </div>
+
           {/* Task */}
-          <div>
-            <label className="form-label">Task (optional)</label>
+          <div className="form-field">
+            <label className="form-label">Task <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
             <textarea
               value={task}
               onChange={(e) => setTask(e.target.value)}
@@ -198,18 +170,11 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn btn--secondary"
-            >
+          <div className="dialog-actions">
+            <button type="button" onClick={onClose} className="btn btn--secondary">
               Cancel
             </button>
-            <button
-              type="submit"
-              className="btn btn--primary"
-            >
+            <button type="submit" className="btn btn--primary">
               Create
             </button>
           </div>

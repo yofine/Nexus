@@ -34,8 +34,11 @@ function printUsage() {
 }
 
 function findProjectRoot(startDir: string): string {
+  const home = process.env.HOME || process.env.USERPROFILE || ''
+
   // Walk up from startDir, prefer the highest-level match
   // (monorepo root, not a nested package)
+  // Stop at HOME — never go above it
   let dir = startDir
   let bestMatch = startDir
 
@@ -47,10 +50,20 @@ function findProjectRoot(startDir: string): string {
       fs.existsSync(path.join(dir, '.git')) ||
       fs.existsSync(path.join(dir, '.nexus'))
     ) {
-      bestMatch = dir // keep walking up in case there's a monorepo root above
+      bestMatch = dir
     }
-    dir = path.dirname(dir)
+    const parent = path.dirname(dir)
+    // Don't traverse above HOME directory
+    if (home && parent === home && dir !== startDir) break
+    dir = parent
   }
+
+  // Warn if resolved to HOME — likely a mistake
+  if (home && bestMatch === home && startDir === home) {
+    console.warn(`Warning: Running Nexus in HOME directory (${home}).`)
+    console.warn(`  Consider: nexus <project-path>`)
+  }
+
   return bestMatch
 }
 

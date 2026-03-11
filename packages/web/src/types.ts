@@ -13,6 +13,14 @@ export interface PaneMeta {
   cwd?: string
 }
 
+export type FileAction = 'read' | 'edit' | 'write' | 'create' | 'delete' | 'bash'
+
+export interface FileActivity {
+  file: string
+  action: FileAction
+  timestamp: number
+}
+
 export interface PaneState {
   id: string
   name: string
@@ -21,6 +29,7 @@ export interface PaneState {
   task?: string
   restore: RestoreMode
   isolation: IsolationMode
+  yolo?: boolean
   branch?: string
   worktreePath?: string
   status: PaneStatus
@@ -49,6 +58,10 @@ export type ClientEvent =
   | { type: 'task.dispatch'; tasks: TaskItem[] }
   | { type: 'review.comment'; paneId: string; comment: ReviewComment }
   | { type: 'git.refresh' }
+  | { type: 'git.accept'; file: string }
+  | { type: 'git.accept.all' }
+  | { type: 'git.discard'; file: string }
+  | { type: 'git.discard.all' }
   | { type: 'pane.diff.refresh'; paneId: string }
   | { type: 'workspace.save' }
 
@@ -62,6 +75,7 @@ export type ServerEvent =
   | { type: 'fs.tree'; tree: FileNode[] }
   | { type: 'git.diff'; diff: FileDiff[] }
   | { type: 'pane.diff'; paneId: string; diffs: FileDiff[] }
+  | { type: 'pane.activity'; paneId: string; activity: FileActivity }
   | { type: 'workspace.state'; state: WorkspaceState }
 
 // ─── Supporting Types ───────────────────────────────────────
@@ -73,6 +87,7 @@ export interface PaneCreateConfig {
   task?: string
   restore: RestoreMode
   isolation?: IsolationMode
+  yolo?: boolean
 }
 
 export interface ReviewComment {

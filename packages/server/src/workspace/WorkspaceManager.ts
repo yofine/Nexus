@@ -8,6 +8,7 @@ import type {
   PaneMeta,
   FileNode,
   FileDiff,
+  FileActivity,
 } from '../types.ts'
 import { PtyManager } from '../pty/PtyManager.ts'
 import { ConfigManager } from './ConfigManager.ts'
@@ -26,6 +27,7 @@ export interface EventHandlers {
   onPaneStatus?: (paneId: string, status: PaneStatus) => void
   onPaneMeta?: (paneId: string, meta: PaneMeta) => void
   onTerminalData?: (paneId: string, data: string) => void
+  onPaneActivity?: (paneId: string, activity: FileActivity) => void
   onFileTree?: (tree: FileNode[]) => void
   onGitDiff?: (diffs: FileDiff[]) => void
   onPaneDiff?: (paneId: string, diffs: FileDiff[]) => void
@@ -49,6 +51,7 @@ export class WorkspaceManager {
     onPaneStatus: new Set(),
     onPaneMeta: new Set(),
     onTerminalData: new Set(),
+    onPaneActivity: new Set(),
     onFileTree: new Set(),
     onGitDiff: new Set(),
     onPaneDiff: new Set(),
@@ -301,6 +304,10 @@ export class WorkspaceManager {
         p.meta = meta
         this.emit('onPaneMeta', config.id, meta)
       }
+    })
+
+    this.ptyManager.onActivity(config.id, (activity) => {
+      this.emit('onPaneActivity', config.id, activity)
     })
 
     return pane

@@ -1,8 +1,9 @@
 import * as pty from 'node-pty'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PaneConfig, PaneStatus, PaneMeta, AgentDefinition } from '../types.ts'
+import type { PaneConfig, PaneStatus, PaneMeta, AgentDefinition, FileActivity } from '../types.ts'
 import { StatuslineParser } from './StatuslineParser.ts'
+import { ActivityParser } from './ActivityParser.ts'
 import type { ConfigManager } from '../workspace/ConfigManager.ts'
 
 const MAX_SCROLLBACK_BYTES = 512 * 1024 // 512KB per pane
@@ -13,11 +14,13 @@ interface PtyEntry {
   status: PaneStatus
   meta: PaneMeta
   parser: StatuslineParser
+  activityParser: ActivityParser
   scrollback: string[]
   scrollbackBytes: number
   onDataCallbacks: Array<(data: string) => void>
   onStatusCallbacks: Array<(status: PaneStatus) => void>
   onMetaCallbacks: Array<(meta: PaneMeta) => void>
+  onActivityCallbacks: Array<(activity: FileActivity) => void>
 }
 
 export class PtyManager {
@@ -71,8 +74,8 @@ export class PtyManager {
 
     const term = pty.spawn(shell, [], {
       name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
+      cols: 80,
+      rows: 24,
       cwd,
       env,
     })
@@ -83,11 +86,13 @@ export class PtyManager {
       status: 'running',
       meta: {},
       parser: new StatuslineParser(),
+      activityParser: new ActivityParser(),
       scrollback: [],
       scrollbackBytes: 0,
       onDataCallbacks: [],
       onStatusCallbacks: [],
       onMetaCallbacks: [],
+      onActivityCallbacks: [],
     }
 
     this.entries.set(paneId, entry)
@@ -115,6 +120,14 @@ export class PtyManager {
         entry.meta = { ...entry.meta, ...meta }
         for (const cb of entry.onMetaCallbacks) {
           cb(entry.meta)
+        }
+      }
+
+      // Parse file activity from output
+      const activity = entry.activityParser.parse(data)
+      if (activity) {
+        for (const cb of entry.onActivityCallbacks) {
+          cb(activity)
         }
       }
     })
@@ -149,6 +162,11 @@ export class PtyManager {
     // Add continue flag if restoring
     if (config.restore === 'continue' && agentDef.continue_flag) {
       cmd += ` ${agentDef.continue_flag}`
+    }
+
+    // Add yolo flag if enabled
+    if (config.yolo && agentDef.yolo_flag) {
+      cmd += ` ${agentDef.yolo_flag}`
     }
 
     // Send the command to start the agent
@@ -231,6 +249,13 @@ export class PtyManager {
     const entry = this.entries.get(paneId)
     if (entry) {
       entry.onMetaCallbacks.push(callback)
+    }
+  }
+
+  onActivity(paneId: string, callback: (activity: FileActivity) => void): void {
+    const entry = this.entries.get(paneId)
+    if (entry) {
+      entry.onActivityCallbacks.push(callback)
     }
   }
 

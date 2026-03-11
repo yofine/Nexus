@@ -1,14 +1,26 @@
 import { create } from 'zustand'
-import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode } from '@/types'
+import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode, FileActivity, FileAction } from '@/types'
 
 export interface EditorTab {
   id: string
-  type: 'file' | 'review'
+  type: 'file' | 'review' | 'activity'
   label: string
   filePath?: string
   paneId?: string   // null/undefined = workspace (shared) review; set = worktree pane review
   pinned?: boolean
 }
+
+export interface ActivityEntry {
+  id: string
+  paneId: string
+  paneName: string
+  agent: string
+  file: string
+  action: FileAction
+  timestamp: number
+}
+
+let activitySeq = 0
 
 interface WorkspaceStore {
   name: string
@@ -25,6 +37,10 @@ interface WorkspaceStore {
   // Per-pane diffs (worktree isolation)
   paneDiffs: Record<string, FileDiff[]>
   diffViewPaneId: string | null // null = show global workspace diffs
+
+  // Activity tracking
+  activities: ActivityEntry[]
+  paneCurrentFile: Record<string, { file: string; action: FileAction }>
 
   // Tab system
   tabs: EditorTab[]
@@ -44,6 +60,7 @@ interface WorkspaceStore {
   setPaneDiffs: (paneId: string, diffs: FileDiff[]) => void
   removePaneDiffs: (paneId: string) => void
   setDiffViewPaneId: (paneId: string | null) => void
+  addActivity: (paneId: string, activity: FileActivity) => void
   openFileTab: (path: string) => void
   openReviewTab: (paneId?: string, paneName?: string) => void
   closeTab: (tabId: string) => void
@@ -61,8 +78,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   gitDiffs: [],
   paneDiffs: {},
   diffViewPaneId: null,
-  tabs: [{ id: 'review:workspace', type: 'review', label: 'Review', pinned: true }],
-  activeTabId: 'review:workspace',
+  activities: [],
+  paneCurrentFile: {},
+  tabs: [
+    { id: 'tab:activity', type: 'activity', label: 'Activity', pinned: true },
+    { id: 'review:workspace', type: 'review', label: 'Review', pinned: true },
+  ],
+  activeTabId: 'tab:activity',
 
   setWorkspace: (name, description, projectDir, panes) =>
     set((state) => {
@@ -145,6 +167,30 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     }),
 
   setDiffViewPaneId: (diffViewPaneId) => set({ diffViewPaneId }),
+
+  addActivity: (paneId, activity) =>
+    set((state) => {
+      const pane = state.panes.find((p) => p.id === paneId)
+      if (!pane) return state
+      const entry: ActivityEntry = {
+        id: `act-${++activitySeq}`,
+        paneId,
+        paneName: pane.name,
+        agent: pane.agent,
+        file: activity.file,
+        action: activity.action,
+        timestamp: activity.timestamp,
+      }
+      // Keep last 100 activities
+      const activities = [entry, ...state.activities].slice(0, 100)
+      return {
+        activities,
+        paneCurrentFile: {
+          ...state.paneCurrentFile,
+          [paneId]: { file: activity.file, action: activity.action },
+        },
+      }
+    }),
 
   openFileTab: (path) =>
     set((state) => {
