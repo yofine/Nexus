@@ -590,6 +590,16 @@ body {
   font-weight: 600;
 }
 
+.agent-selector-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.agent-selector-btn--disabled:hover {
+  border-color: var(--border-default);
+  background: var(--bg-base);
+}
+
 /* Form row pair (side by side on wider screens) */
 .form-row-pair {
   display: flex;

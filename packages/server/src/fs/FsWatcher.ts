@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
-import type { FileNode } from '../types.ts'
+import type { FileNode, FileActivity } from '../types.ts'
 
 const IGNORED_DIRS = new Set([
   'node_modules',
@@ -23,6 +23,8 @@ export class FsWatcher {
   private tree: FileNode[] = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
   private listeners = new Set<(tree: FileNode[]) => void>()
+  private fileChangeListeners = new Set<(activity: FileActivity) => void>()
+  private recentChanges = new Map<string, number>() // path → timestamp for dedup
 
   constructor(projectDir: string) {
     this.projectDir = projectDir
@@ -53,8 +55,39 @@ export class FsWatcher {
       }, 300)
     }
 
-    this.watcher.on('add', scheduleRebuild)
-    this.watcher.on('unlink', scheduleRebuild)
+    // Emit individual file change events for activity tracking
+    const emitFileChange = (eventType: 'add' | 'change' | 'unlink', filePath: string) => {
+      // Only emit for files, not directories
+      const relativePath = path.relative(this.projectDir, filePath)
+      if (!relativePath || relativePath.startsWith('..')) return
+      // Skip files without extension (likely directories or special files)
+      if (!/\.\w{1,10}$/.test(path.basename(filePath))) return
+      // Dedup: skip if same file changed within 1s
+      const now = Date.now()
+      const lastChange = this.recentChanges.get(relativePath)
+      if (lastChange && now - lastChange < 1000) return
+      this.recentChanges.set(relativePath, now)
+      // Clean old entries periodically
+      if (this.recentChanges.size > 200) {
+        for (const [key, ts] of this.recentChanges) {
+          if (now - ts > 10000) this.recentChanges.delete(key)
+        }
+      }
+
+      const actionMap = { add: 'create' as const, change: 'edit' as const, unlink: 'delete' as const }
+      const activity: FileActivity = {
+        file: relativePath,
+        action: actionMap[eventType],
+        timestamp: now,
+      }
+      for (const listener of this.fileChangeListeners) {
+        listener(activity)
+      }
+    }
+
+    this.watcher.on('add', (p) => { emitFileChange('add', p); scheduleRebuild() })
+    this.watcher.on('change', (p) => { emitFileChange('change', p) })
+    this.watcher.on('unlink', (p) => { emitFileChange('unlink', p); scheduleRebuild() })
     this.watcher.on('addDir', scheduleRebuild)
     this.watcher.on('unlinkDir', scheduleRebuild)
     this.watcher.on('error', () => {
@@ -70,6 +103,11 @@ export class FsWatcher {
   onTreeChange(callback: (tree: FileNode[]) => void): () => void {
     this.listeners.add(callback)
     return () => this.listeners.delete(callback)
+  }
+
+  onFileChange(callback: (activity: FileActivity) => void): () => void {
+    this.fileChangeListeners.add(callback)
+    return () => this.fileChangeListeners.delete(callback)
   }
 
   close(): void {

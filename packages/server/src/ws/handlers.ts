@@ -37,6 +37,11 @@ export function setupWsHandlers(
     }
   }
 
+  // Send initial branch info
+  gitService?.getBranchInfo()
+    .then((info) => send({ type: 'git.branchInfo', ...info }))
+    .catch(() => {})
+
   // Register event handlers for this client (multi-client safe)
   const cleanup = workspaceManager.onEvents({
     onTerminalData: (paneId, data) => {
@@ -57,14 +62,17 @@ export function setupWsHandlers(
     onPaneActivity: (paneId, activity) => {
       send({ type: 'pane.activity', paneId, activity })
     },
+    onFileActivity: (activity) => {
+      send({ type: 'file.activity', activity })
+    },
     onPaneDiff: (paneId, diffs) => {
       send({ type: 'pane.diff', paneId, diffs })
     },
     onFileTree: (tree) => {
       send({ type: 'fs.tree', tree })
     },
-    onGitDiff: (diff) => {
-      send({ type: 'git.diff', diff })
+    onGitDiff: (result) => {
+      send({ type: 'git.diff', unstaged: result.unstaged, staged: result.staged })
     },
   })
 
@@ -128,6 +136,51 @@ export function setupWsHandlers(
         gitService?.discardAll().catch((err) => {
           console.error('git.discard.all failed:', err)
         })
+        break
+
+      case 'git.unstage':
+        gitService?.unstageFile(event.file).catch((err) => {
+          console.error('git.unstage failed:', err)
+        })
+        break
+
+      case 'git.unstage.all':
+        gitService?.unstageAll().catch((err) => {
+          console.error('git.unstage.all failed:', err)
+        })
+        break
+
+      case 'git.commit':
+        if (gitService) {
+          gitService.commit(event.message)
+            .then((summary) => {
+              send({ type: 'git.result', action: 'commit', success: true, message: summary })
+              // Also refresh branch info after commit
+              return gitService.getBranchInfo()
+            })
+            .then((info) => {
+              send({ type: 'git.branchInfo', ...info })
+            })
+            .catch((err) => {
+              send({ type: 'git.result', action: 'commit', success: false, message: String(err) })
+            })
+        }
+        break
+
+      case 'git.push':
+        if (gitService) {
+          gitService.push()
+            .then((summary) => {
+              send({ type: 'git.result', action: 'push', success: true, message: summary })
+              return gitService.getBranchInfo()
+            })
+            .then((info) => {
+              send({ type: 'git.branchInfo', ...info })
+            })
+            .catch((err) => {
+              send({ type: 'git.result', action: 'push', success: false, message: String(err) })
+            })
+        }
         break
 
       case 'pane.diff.refresh':

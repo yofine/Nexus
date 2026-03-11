@@ -118,6 +118,20 @@ async function main() {
 
   switch (command) {
     case 'start': {
+      // Check agent availability and print hints for uninstalled agents
+      const { ConfigManager: CM } = await import('./workspace/ConfigManager.ts')
+      const cm = new CM(projectDir)
+      cm.loadGlobalConfig()
+      const availability = cm.checkAgentAvailability()
+      const missing = Object.entries(availability).filter(([, a]) => !a.installed)
+      if (missing.length > 0) {
+        console.log('\n  Optional agents not found:')
+        for (const [key, info] of missing) {
+          console.log(`    ⚠ ${key} (${info.bin}) — install: ${info.installHint}`)
+        }
+        console.log()
+      }
+
       const port = parseInt(process.env.NEXUS_PORT || String(DEFAULT_PORT), 10)
       await startServer(port, projectDir)
       break

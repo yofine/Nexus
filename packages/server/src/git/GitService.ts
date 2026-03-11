@@ -3,14 +3,19 @@ import { simpleGit, type SimpleGit } from 'simple-git'
 import { watch, type FSWatcher } from 'chokidar'
 import type { FileDiff } from '../types.ts'
 
+export interface GitDiffResult {
+  unstaged: FileDiff[]
+  staged: FileDiff[]
+}
+
 export class GitService {
   private git: SimpleGit
   private projectDir: string
   private gitWatcher: FSWatcher | null = null
   private workWatcher: FSWatcher | null = null
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
-  private listeners = new Set<(diffs: FileDiff[]) => void>()
-  private currentDiffs: FileDiff[] = []
+  private listeners = new Set<(result: GitDiffResult) => void>()
+  private currentResult: GitDiffResult = { unstaged: [], staged: [] }
 
   constructor(projectDir: string) {
     this.projectDir = projectDir
@@ -18,11 +23,9 @@ export class GitService {
   }
 
   async start(): Promise<void> {
-    // Check if this is a git repo
     const isRepo = await this.git.checkIsRepo()
     if (!isRepo) return
 
-    // Get initial diff
     await this.refresh()
 
     const scheduleRefresh = () => {
@@ -32,7 +35,6 @@ export class GitService {
       }, 1000)
     }
 
-    // Watch .git directory for changes (index updates, commits, etc.)
     const gitDir = path.join(this.projectDir, '.git')
     this.gitWatcher = watch([
       path.join(gitDir, 'index'),
@@ -44,7 +46,6 @@ export class GitService {
     })
     this.gitWatcher.on('all', scheduleRefresh)
 
-    // Watch working tree for file content changes (so diffs update automatically)
     this.workWatcher = watch(this.projectDir, {
       ignored: (filePath: string) => {
         const basename = path.basename(filePath)
@@ -59,58 +60,59 @@ export class GitService {
 
   async refresh(): Promise<void> {
     try {
-      const diffs = await this.getDiffs()
-      this.currentDiffs = diffs
+      const result = await this.getDiffs()
+      this.currentResult = result
       this.notifyListeners()
     } catch {
       // Git operation failed, ignore
     }
   }
 
-  getCurrentDiffs(): FileDiff[] {
-    return this.currentDiffs
+  getCurrentDiffs(): GitDiffResult {
+    return this.currentResult
   }
 
-  onDiffChange(callback: (diffs: FileDiff[]) => void): () => void {
+  onDiffChange(callback: (result: GitDiffResult) => void): () => void {
     this.listeners.add(callback)
     return () => this.listeners.delete(callback)
   }
 
-  /**
-   * Stage a file (git add). For "accept" workflow.
-   */
+  // ─── Stage / Unstage ─────────────────────────────────────
+
   async acceptFile(file: string): Promise<void> {
     await this.git.add(file)
     await this.refresh()
   }
 
-  /**
-   * Stage all changed files.
-   */
   async acceptAll(): Promise<void> {
     await this.git.add('-A')
     await this.refresh()
   }
 
-  /**
-   * Discard unstaged changes for a file (git checkout -- file).
-   * For untracked files, removes them.
-   */
+  async unstageFile(file: string): Promise<void> {
+    await this.git.reset(['HEAD', '--', file])
+    await this.refresh()
+  }
+
+  async unstageAll(): Promise<void> {
+    await this.git.reset(['HEAD'])
+    await this.refresh()
+  }
+
+  // ─── Discard ──────────────────────────────────────────────
+
   async discardFile(file: string): Promise<void> {
     const status = await this.git.status()
     const isUntracked = status.not_added.includes(file) || status.created.includes(file)
 
     if (isUntracked) {
-      // Remove untracked file
       const fullPath = path.join(this.projectDir, file)
       const fs = await import('node:fs')
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath)
       }
     } else {
-      // Restore from HEAD for tracked files
       await this.git.checkout(['--', file])
-      // Also unstage if staged
       try {
         await this.git.reset(['HEAD', '--', file])
       } catch {
@@ -120,14 +122,38 @@ export class GitService {
     await this.refresh()
   }
 
-  /**
-   * Discard all changes (git checkout -- . && git clean -fd).
-   */
   async discardAll(): Promise<void> {
     await this.git.checkout(['--', '.'])
     await this.git.clean('f', ['-d'])
     await this.refresh()
   }
+
+  // ─── Commit / Push ────────────────────────────────────────
+
+  async commit(message: string): Promise<string> {
+    const result = await this.git.commit(message)
+    await this.refresh()
+    const summary = result.summary
+    return `${summary.changes} file${summary.changes !== 1 ? 's' : ''}, +${summary.insertions} -${summary.deletions}`
+  }
+
+  async push(): Promise<string> {
+    await this.git.push()
+    await this.refresh()
+    return 'Pushed successfully'
+  }
+
+  async getBranchInfo(): Promise<{ branch: string; remote?: string; ahead: number; behind: number }> {
+    const status = await this.git.status()
+    return {
+      branch: status.current || 'HEAD',
+      remote: status.tracking || undefined,
+      ahead: status.ahead,
+      behind: status.behind,
+    }
+  }
+
+  // ─── Cleanup ──────────────────────────────────────────────
 
   close(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer)
@@ -137,59 +163,56 @@ export class GitService {
     this.workWatcher = null
   }
 
-  private async getDiffs(): Promise<FileDiff[]> {
-    const status = await this.git.status()
-    const diffs: FileDiff[] = []
+  // ─── Internal ─────────────────────────────────────────────
 
-    // Build set of staged files to exclude them from the diff list
+  private async getDiffs(): Promise<GitDiffResult> {
+    const status = await this.git.status()
+    const unstaged: FileDiff[] = []
+    const staged: FileDiff[] = []
+
+    // Get unified diffs
+    const [unstagedDiffText, stagedDiffText] = await Promise.all([
+      this.git.diff(),
+      this.git.diff(['--cached']),
+    ])
+
+    const unstagedHunks = this.parseFileDiffs(unstagedDiffText)
+    const stagedHunks = this.parseFileDiffs(stagedDiffText)
+
     const stagedFiles = new Set<string>(status.staged)
 
-    // Get unified diff for unstaged changes only
-    const diffText = await this.git.diff()
-
-    // Parse file statuses — only include unstaged changes
-    const allFiles = new Set<string>()
-
+    // ─── Unstaged changes ───────────────────────────────────
     for (const file of status.not_added) {
-      // Untracked files
-      allFiles.add(file)
-      diffs.push({ file, status: 'added', hunks: '' })
+      unstaged.push({ file, status: 'added', hunks: '' })
     }
     for (const file of status.created) {
       if (!stagedFiles.has(file)) {
-        allFiles.add(file)
-        diffs.push({ file, status: 'added', hunks: '' })
+        unstaged.push({ file, status: 'added', hunks: '' })
       }
     }
     for (const file of status.deleted) {
       if (!stagedFiles.has(file)) {
-        allFiles.add(file)
-        diffs.push({ file, status: 'deleted', hunks: '' })
+        unstaged.push({ file, status: 'deleted', hunks: '' })
       }
     }
     for (const file of status.modified) {
-      allFiles.add(file)
-      diffs.push({ file, status: 'modified', hunks: '' })
+      unstaged.push({ file, status: 'modified', hunks: unstagedHunks.get(file) || '' })
     }
     for (const file of status.renamed) {
       if (!stagedFiles.has(file.to)) {
-        allFiles.add(file.to)
-        diffs.push({ file: file.to, status: 'renamed', hunks: '' })
+        unstaged.push({ file: file.to, status: 'renamed', hunks: '' })
       }
     }
 
-    // Attach diff hunks to matching files
-    if (diffText) {
-      const fileDiffs = this.parseFileDiffs(diffText)
-      for (const diff of diffs) {
-        if (fileDiffs.has(diff.file)) {
-          diff.hunks = fileDiffs.get(diff.file)!
-        }
+    // Attach hunks to unstaged entries that don't have them yet
+    for (const diff of unstaged) {
+      if (!diff.hunks && unstagedHunks.has(diff.file)) {
+        diff.hunks = unstagedHunks.get(diff.file)!
       }
     }
 
-    // For newly created (untracked) files, get their content as diff
-    for (const diff of diffs) {
+    // For untracked files, try to show content
+    for (const diff of unstaged) {
       if (diff.status === 'added' && !diff.hunks) {
         try {
           const content = await this.git.show([`:${diff.file}`]).catch(() => null)
@@ -202,21 +225,36 @@ export class GitService {
       }
     }
 
-    return diffs
+    // ─── Staged changes ─────────────────────────────────────
+    // Use status.files for accurate staged file detection
+    for (const fileResult of status.files) {
+      const indexStatus = fileResult.index
+      if (!indexStatus || indexStatus === '?' || indexStatus === ' ') continue
+
+      const file = fileResult.path
+      let diffStatus: FileDiff['status'] = 'modified'
+      if (indexStatus === 'A') diffStatus = 'added'
+      else if (indexStatus === 'D') diffStatus = 'deleted'
+      else if (indexStatus === 'R') diffStatus = 'renamed'
+
+      staged.push({
+        file,
+        status: diffStatus,
+        hunks: stagedHunks.get(file) || '',
+      })
+    }
+
+    return { unstaged, staged }
   }
 
-  /**
-   * Parse a unified diff output into a map of filename → diff hunks string
-   */
   private parseFileDiffs(diffText: string): Map<string, string> {
     const result = new Map<string, string>()
+    if (!diffText) return result
     const fileSections = diffText.split(/^diff --git /m).filter(Boolean)
 
     for (const section of fileSections) {
-      // Extract filename from "a/path b/path" header
       const headerMatch = section.match(/^a\/(.+?) b\/(.+)/)
       if (!headerMatch) continue
-
       const filename = headerMatch[2]
       result.set(filename, `diff --git ${section}`)
     }
@@ -226,7 +264,7 @@ export class GitService {
 
   private notifyListeners(): void {
     for (const listener of this.listeners) {
-      listener(this.currentDiffs)
+      listener(this.currentResult)
     }
   }
 }

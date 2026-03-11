@@ -3,7 +3,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { execSync } from 'node:child_process'
 import yaml from 'js-yaml'
-import type { GlobalConfig, WorkspaceConfig, AgentDefinition } from '../types.ts'
+import type { GlobalConfig, WorkspaceConfig, AgentDefinition, AgentAvailability } from '../types.ts'
 
 const GLOBAL_DIR = path.join(os.homedir(), '.nexus')
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_DIR, 'config.yaml')
@@ -181,6 +181,37 @@ export class ConfigManager {
       }
     }
     return '/bin/sh'
+  }
+
+  /**
+   * Check which agents are available (installed) on the system.
+   * Returns a record of agentType → { installed, bin, installHint }
+   */
+  checkAgentAvailability(): Record<string, AgentAvailability> {
+    const global = this.loadGlobalConfig()
+    const knownAgents: Array<{ key: string; bin: string; installHint: string }> = [
+      { key: 'claudecode', bin: 'claude', installHint: 'npm install -g @anthropic-ai/claude-code' },
+      { key: 'opencode', bin: 'opencode', installHint: 'go install github.com/opencode-ai/opencode@latest' },
+      { key: 'kimi-cli', bin: 'kimi', installHint: 'pip install kimi-cli' },
+      { key: 'qwencode', bin: 'qwen-code', installHint: 'pip install qwen-code' },
+    ]
+
+    const result: Record<string, AgentAvailability> = {}
+
+    for (const agent of knownAgents) {
+      const def = global.agents[agent.key]
+      const bin = def?.bin || agent.bin
+      let installed = false
+      try {
+        execSync(`which ${bin}`, { stdio: 'ignore' })
+        installed = true
+      } catch {
+        // not installed
+      }
+      result[agent.key] = { installed, bin, installHint: agent.installHint }
+    }
+
+    return result
   }
 
   getProjectDir(): string {

@@ -97,6 +97,7 @@ export function getAgentColor(agent: string): string {
     gemini: '#8B5CF6',
     aider: '#22C55E',
     cursor: '#F59E0B',
+    workspace: '#888888',
   }
   return map[agent.toLowerCase()] || 'var(--accent-primary)'
 }

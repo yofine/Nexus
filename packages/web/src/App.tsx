@@ -15,8 +15,11 @@ export function App() {
     setConnectionStatus,
     setFileTree,
     setGitDiffs,
+    setGitStagedDiffs,
+    setGitBranchInfo,
     setPaneDiffs,
     addActivity,
+    addFileActivity,
   } = useWorkspaceStore()
 
   const handleMessage = useCallback(
@@ -57,7 +60,19 @@ export function App() {
           break
 
         case 'git.diff':
-          setGitDiffs(event.diff)
+          setGitDiffs(event.unstaged)
+          setGitStagedDiffs(event.staged || [])
+          break
+
+        case 'git.branchInfo':
+          setGitBranchInfo({ branch: event.branch, remote: event.remote, ahead: event.ahead, behind: event.behind })
+          break
+
+        case 'git.result':
+          // Commit/push results — UI updates via diff refresh automatically
+          if (!event.success) {
+            console.error(`git.${event.action} failed:`, event.message)
+          }
           break
 
         case 'pane.diff':
@@ -67,9 +82,13 @@ export function App() {
         case 'pane.activity':
           addActivity(event.paneId, event.activity)
           break
+
+        case 'file.activity':
+          addFileActivity(event.activity)
+          break
       }
     },
-    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitDiffs, setPaneDiffs, addActivity],
+    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitDiffs, setGitStagedDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity],
   )
 
   const { send, status } = useWebSocket({ onMessage: handleMessage })

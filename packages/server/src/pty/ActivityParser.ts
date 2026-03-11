@@ -6,15 +6,29 @@ export interface FileActivity {
   timestamp: number
 }
 
+// More complete ANSI stripping — handles OSC sequences, cursor movement, etc.
+function stripAnsi(str: string): string {
+  return str
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '') // OSC sequences
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')          // CSI sequences
+    .replace(/\x1b[()][AB012]/g, '')                 // Character set selection
+    .replace(/\x1b[>=<]/g, '')                       // Keypad/cursor mode
+    .replace(/\x0f|\x0e/g, '')                       // SI/SO
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')  // Other control chars
+}
+
 /**
  * Parses Claude Code PTY output to detect file operations.
- * Extracts tool calls like Read, Edit, Write from terminal output.
+ * Claude Code outputs tool usage with various ANSI-styled formats.
+ * This parser strips ANSI codes and matches known patterns.
  */
 export class ActivityParser {
   private buffer = ''
+  private lastFile = ''
+  private lastTime = 0
+  private readonly DEDUP_MS = 2000 // Ignore same file within 2s
 
   parse(data: string): FileActivity | null {
-    // Only process lines containing potential tool calls
     if (!data.includes('\n')) {
       this.buffer += data
       return null
@@ -28,54 +42,87 @@ export class ActivityParser {
       this.buffer = trailing
     }
 
-    // Check lines in reverse — most recent activity matters
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const activity = this.parseLine(lines[i])
-      if (activity) return activity
+    // Check all lines, return first match
+    for (const line of lines) {
+      const activity = this.parseLine(line)
+      if (activity) {
+        // Dedup: skip if same file within DEDUP_MS
+        if (activity.file === this.lastFile && activity.timestamp - this.lastTime < this.DEDUP_MS) {
+          continue
+        }
+        this.lastFile = activity.file
+        this.lastTime = activity.timestamp
+        return activity
+      }
     }
 
     return null
   }
 
   private parseLine(line: string): FileActivity | null {
-    // Strip ANSI escape codes for matching
-    const clean = line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim()
-    if (!clean) return null
+    const clean = stripAnsi(line).trim()
+    if (!clean || clean.length < 5) return null
 
-    // Pattern 1: Tool use markers — "⠿ Read file_path" / "⠿ Edit file_path"
-    // Claude Code uses spinner chars followed by tool name
-    const toolUseMatch = clean.match(
-      /(?:[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠿✓✗●◉▶▸►]|\*)\s*(Read|Edit|Write|MultiEdit|Create|Delete)\s+(.+)/i,
+    // ── Claude Code specific patterns ──
+
+    // Pattern: "⎿  Read file_path" or "⎿  Edit file_path" (Claude Code tool result markers)
+    const toolResultMatch = clean.match(
+      /^[⎿│├└┌┐┘┤┬┴┼╭╮╰╯─━]?\s*(Read|Edit|Write|MultiEdit|Create|Delete|Glob|Grep|Bash)\s+(.+)/i,
     )
-    if (toolUseMatch) {
-      return this.buildActivity(toolUseMatch[1], toolUseMatch[2])
+    if (toolResultMatch) {
+      return this.buildActivity(toolResultMatch[1], toolResultMatch[2])
     }
 
-    // Pattern 2: Tool call with parentheses — "Read(src/foo.ts)" / "Edit(src/bar.ts)"
+    // Pattern: Tool name at start of line followed by path — "Read src/foo.ts"
+    // Must be exact tool name, not part of a sentence
+    const toolStartMatch = clean.match(
+      /^(Read|Edit|Write|MultiEdit|Create|Delete)\s+([^\s(][^\s]*\.\w{1,10})\b/,
+    )
+    if (toolStartMatch) {
+      return this.buildActivity(toolStartMatch[1], toolStartMatch[2])
+    }
+
+    // Pattern: Tool name with parenthesized path — "Read(src/foo.ts)" or "Edit(file_path=...)"
     const parenMatch = clean.match(
-      /\b(Read|Edit|Write|MultiEdit|Create|Delete)\(([^)]+)\)/i,
+      /\b(Read|Edit|Write|MultiEdit|Create|Delete)\((?:file_path\s*[:=]\s*)?["']?([^"')]+\.\w{1,10})["']?\)/i,
     )
     if (parenMatch) {
       return this.buildActivity(parenMatch[1], parenMatch[2])
     }
 
-    // Pattern 3: "file_path:" or "file:" style — common in structured output
-    const filePathMatch = clean.match(
-      /(?:file_path|file|path)\s*[:=]\s*['"]?([^\s'")\]]+\.\w{1,10})['"]?/i,
+    // Pattern: "file_path": "src/foo.ts" (JSON-like in tool output)
+    const jsonFieldMatch = clean.match(
+      /["']?file_path["']?\s*[:=]\s*["']([^"']+\.\w{1,10})["']/i,
     )
-    if (filePathMatch) {
-      const action = this.inferAction(clean)
-      if (action) {
-        return this.buildActivity(action, filePathMatch[1])
-      }
+    if (jsonFieldMatch) {
+      const action = this.inferActionFromContext(clean)
+      return this.buildActivity(action, jsonFieldMatch[1])
     }
 
-    // Pattern 4: Direct tool header lines — "── Read: src/foo.ts ──" or "Read: src/foo.ts"
-    const headerMatch = clean.match(
-      /(?:──\s*)?(Read|Edit|Write|MultiEdit|Create|Delete)\s*:\s*(.+?)(?:\s*──)?$/i,
+    // Pattern: "── Read: src/foo.ts" or "Read: src/foo.ts"
+    const colonMatch = clean.match(
+      /(?:─+\s*)?(Read|Edit|Write|MultiEdit|Create|Delete)\s*:\s*(.+?)(?:\s*─+)?$/i,
     )
-    if (headerMatch) {
-      return this.buildActivity(headerMatch[1], headerMatch[2])
+    if (colonMatch) {
+      return this.buildActivity(colonMatch[1], colonMatch[2])
+    }
+
+    // Pattern: Spinner chars + tool — "⠿ Edit src/foo.ts" / "✓ Write src/bar.ts"
+    const spinnerMatch = clean.match(
+      /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠿✓✗✔✘●◉▶▸►◆◇■□▪▫★☆○◎]\s*(Read|Edit|Write|MultiEdit|Create|Delete)\s+(.+)/i,
+    )
+    if (spinnerMatch) {
+      return this.buildActivity(spinnerMatch[1], spinnerMatch[2])
+    }
+
+    // Pattern: Indented path after tool header (continuation line)
+    // e.g., "   /relative/path/file.ts" or "   path/to/file.ts"
+    // Only if line is just a path with leading whitespace
+    const indentedPathMatch = clean.match(
+      /^([a-zA-Z0-9_][a-zA-Z0-9_./\-]*\.\w{1,10})$/,
+    )
+    if (indentedPathMatch && line.startsWith(' ')) {
+      return this.buildActivity('Read', indentedPathMatch[1])
     }
 
     return null
@@ -92,6 +139,8 @@ export class ActivityParser {
   private toolToAction(tool: string): FileAction {
     switch (tool.toLowerCase()) {
       case 'read':
+      case 'glob':
+      case 'grep':
         return 'read'
       case 'edit':
       case 'multiedit':
@@ -102,42 +151,44 @@ export class ActivityParser {
         return 'create'
       case 'delete':
         return 'delete'
+      case 'bash':
+        return 'bash'
       default:
         return 'read'
     }
   }
 
-  private inferAction(line: string): string | null {
+  private inferActionFromContext(line: string): string {
     const lower = line.toLowerCase()
-    if (lower.includes('edit') || lower.includes('modify') || lower.includes('update')) return 'Edit'
-    if (lower.includes('write') || lower.includes('create') || lower.includes('new file')) return 'Write'
-    if (lower.includes('read') || lower.includes('view') || lower.includes('open')) return 'Read'
+    if (lower.includes('edit') || lower.includes('old_string') || lower.includes('new_string')) return 'Edit'
+    if (lower.includes('write') || lower.includes('content')) return 'Write'
     if (lower.includes('delete') || lower.includes('remove')) return 'Delete'
-    return null
+    return 'Read'
   }
 
   private cleanPath(raw: string): string {
     return raw
       .trim()
-      .replace(/^['"`]+|['"`]+$/g, '') // Remove quotes
-      .replace(/^\.\//, '') // Remove leading ./
-      .replace(/\s+.*$/, '') // Remove anything after whitespace (e.g., trailing description)
-      .replace(/[,;:]+$/, '') // Remove trailing punctuation
+      .replace(/^['"`]+|['"`]+$/g, '')
+      .replace(/^\.\//, '')
+      .replace(/\s+.*$/, '')   // Remove anything after whitespace
+      .replace(/[,;:)]+$/, '') // Remove trailing punctuation
+      .replace(/^\(/, '')      // Remove leading paren
   }
 
   private isValidPath(file: string): boolean {
+    if (!file || file.length < 3) return false
     // Must have a file extension
     if (!/\.\w{1,10}$/.test(file)) return false
-    // Must not be an absolute path or URL
+    // Must not be absolute path or URL
     if (file.startsWith('/') || file.includes('://')) return false
-    // Must not contain suspicious characters
-    if (/[<>|&$`]/.test(file)) return false
-    // Sanity: path segments check
+    // No suspicious chars
+    if (/[<>|&$`\\{}[\]]/.test(file)) return false
+    // Reasonable length
     const parts = file.split('/')
     if (parts.length > 15) return false
-    // Each part should be reasonable
     for (const part of parts) {
-      if (part.length > 100) return false
+      if (part.length > 100 || part.length === 0) return false
     }
     return true
   }

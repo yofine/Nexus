@@ -33,6 +33,8 @@ interface WorkspaceStore {
   // File tree and git diff
   fileTree: FileNode[]
   gitDiffs: FileDiff[]
+  gitStagedDiffs: FileDiff[]
+  gitBranchInfo: { branch: string; remote?: string; ahead: number; behind: number } | null
 
   // Per-pane diffs (worktree isolation)
   paneDiffs: Record<string, FileDiff[]>
@@ -57,10 +59,13 @@ interface WorkspaceStore {
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting') => void
   setFileTree: (tree: FileNode[]) => void
   setGitDiffs: (diffs: FileDiff[]) => void
+  setGitStagedDiffs: (diffs: FileDiff[]) => void
+  setGitBranchInfo: (info: { branch: string; remote?: string; ahead: number; behind: number }) => void
   setPaneDiffs: (paneId: string, diffs: FileDiff[]) => void
   removePaneDiffs: (paneId: string) => void
   setDiffViewPaneId: (paneId: string | null) => void
   addActivity: (paneId: string, activity: FileActivity) => void
+  addFileActivity: (activity: FileActivity) => void
   openFileTab: (path: string) => void
   openReviewTab: (paneId?: string, paneName?: string) => void
   closeTab: (tabId: string) => void
@@ -76,6 +81,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   connectionStatus: 'disconnected',
   fileTree: [],
   gitDiffs: [],
+  gitStagedDiffs: [],
+  gitBranchInfo: null,
   paneDiffs: {},
   diffViewPaneId: null,
   activities: [],
@@ -152,6 +159,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   setGitDiffs: (gitDiffs) => set({ gitDiffs }),
 
+  setGitStagedDiffs: (gitStagedDiffs) => set({ gitStagedDiffs }),
+
+  setGitBranchInfo: (gitBranchInfo) => set({ gitBranchInfo }),
+
   setPaneDiffs: (paneId, diffs) =>
     set((state) => ({
       paneDiffs: { ...state.paneDiffs, [paneId]: diffs },
@@ -189,6 +200,36 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
           ...state.paneCurrentFile,
           [paneId]: { file: activity.file, action: activity.action },
         },
+      }
+    }),
+
+  addFileActivity: (activity) =>
+    set((state) => {
+      // Skip if this file was already tracked by a pane.activity event recently
+      const recent = state.activities[0]
+      if (recent && recent.file === activity.file && activity.timestamp - recent.timestamp < 2000) {
+        return state
+      }
+      // Try to attribute: find the most recently active (running/waiting) agent
+      const activePanes = state.panes.filter(
+        (p) => p.status === 'running' || p.status === 'waiting',
+      )
+      const pane = activePanes.length > 0 ? activePanes[0] : null
+      const entry: ActivityEntry = {
+        id: `act-${++activitySeq}`,
+        paneId: pane?.id || '__workspace__',
+        paneName: pane?.name || 'Workspace',
+        agent: pane?.agent || 'workspace',
+        file: activity.file,
+        action: activity.action,
+        timestamp: activity.timestamp,
+      }
+      const activities = [entry, ...state.activities].slice(0, 100)
+      return {
+        activities,
+        paneCurrentFile: pane
+          ? { ...state.paneCurrentFile, [pane.id]: { file: activity.file, action: activity.action } }
+          : state.paneCurrentFile,
       }
     }),
 

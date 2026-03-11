@@ -123,11 +123,13 @@ export class PtyManager {
         }
       }
 
-      // Parse file activity from output
-      const activity = entry.activityParser.parse(data)
-      if (activity) {
-        for (const cb of entry.onActivityCallbacks) {
-          cb(activity)
+      // Parse file activity from PTY output (attributed to this pane)
+      if (config.agent !== '__shell__') {
+        const activity = entry.activityParser.parse(data)
+        if (activity) {
+          for (const cb of entry.onActivityCallbacks) {
+            cb(activity)
+          }
         }
       }
     })

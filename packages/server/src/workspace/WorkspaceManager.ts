@@ -10,6 +10,7 @@ import type {
   FileDiff,
   FileActivity,
 } from '../types.ts'
+import type { GitDiffResult } from '../git/GitService.ts'
 import { PtyManager } from '../pty/PtyManager.ts'
 import { ConfigManager } from './ConfigManager.ts'
 import { WorktreeManager } from '../git/WorktreeManager.ts'
@@ -28,8 +29,9 @@ export interface EventHandlers {
   onPaneMeta?: (paneId: string, meta: PaneMeta) => void
   onTerminalData?: (paneId: string, data: string) => void
   onPaneActivity?: (paneId: string, activity: FileActivity) => void
+  onFileActivity?: (activity: FileActivity) => void
   onFileTree?: (tree: FileNode[]) => void
-  onGitDiff?: (diffs: FileDiff[]) => void
+  onGitDiff?: (result: GitDiffResult) => void
   onPaneDiff?: (paneId: string, diffs: FileDiff[]) => void
 }
 
@@ -52,6 +54,7 @@ export class WorkspaceManager {
     onPaneMeta: new Set(),
     onTerminalData: new Set(),
     onPaneActivity: new Set(),
+    onFileActivity: new Set(),
     onFileTree: new Set(),
     onGitDiff: new Set(),
     onPaneDiff: new Set(),
@@ -232,8 +235,12 @@ export class WorkspaceManager {
     this.emit('onFileTree', tree)
   }
 
-  emitGitDiff(diffs: FileDiff[]): void {
-    this.emit('onGitDiff', diffs)
+  emitGitDiff(result: GitDiffResult): void {
+    this.emit('onGitDiff', result)
+  }
+
+  emitFileActivity(activity: FileActivity): void {
+    this.emit('onFileActivity', activity)
   }
 
   async refreshPaneDiff(paneId: string): Promise<void> {
@@ -249,7 +256,7 @@ export class WorkspaceManager {
   getPaneDiffs(): Map<string, FileDiff[]> {
     const result = new Map<string, FileDiff[]>()
     for (const [paneId, gitService] of this.perPaneGitServices) {
-      result.set(paneId, gitService.getCurrentDiffs())
+      result.set(paneId, gitService.getCurrentDiffs().unstaged)
     }
     return result
   }
@@ -315,9 +322,9 @@ export class WorkspaceManager {
 
   private async startPaneGitService(paneId: string, worktreePath: string): Promise<void> {
     const gitService = new GitService(worktreePath)
-    gitService.onDiffChange((diffs) => {
-      // Tag each diff with the paneId
-      const tagged = diffs.map((d) => ({ ...d, paneId }))
+    gitService.onDiffChange((result) => {
+      // Tag each unstaged diff with the paneId (worktree panes show unstaged only)
+      const tagged = result.unstaged.map((d) => ({ ...d, paneId }))
       this.emit('onPaneDiff', paneId, tagged)
     })
     await gitService.start()

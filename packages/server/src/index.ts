@@ -38,12 +38,15 @@ export async function startServer(port: number, projectDir: string) {
   fsWatcher.onTreeChange((tree) => {
     workspaceManager.emitFileTree(tree)
   })
+  fsWatcher.onFileChange((activity) => {
+    workspaceManager.emitFileActivity(activity)
+  })
   fsWatcher.start()
 
   // Git service
   const gitService = new GitService(projectDir)
-  gitService.onDiffChange((diffs) => {
-    workspaceManager.emitGitDiff(diffs)
+  gitService.onDiffChange((result) => {
+    workspaceManager.emitGitDiff(result)
   })
   await gitService.start()
 
@@ -60,9 +63,9 @@ export async function startServer(port: number, projectDir: string) {
       if (tree.length > 0) {
         socket.send(JSON.stringify({ type: 'fs.tree', tree }))
       }
-      const diffs = gitService.getCurrentDiffs()
-      if (diffs.length > 0) {
-        socket.send(JSON.stringify({ type: 'git.diff', diff: diffs }))
+      const { unstaged, staged } = gitService.getCurrentDiffs()
+      if (unstaged.length > 0 || staged.length > 0) {
+        socket.send(JSON.stringify({ type: 'git.diff', unstaged, staged }))
       }
       console.log('[WS] Client connected')
 
@@ -80,6 +83,11 @@ export async function startServer(port: number, projectDir: string) {
   // Health check
   fastify.get('/api/health', async () => {
     return { status: 'ok' }
+  })
+
+  // Agent availability endpoint
+  fastify.get('/api/agents', async () => {
+    return configManager.checkAgentAvailability()
   })
 
   // File read endpoint
@@ -156,7 +164,8 @@ export async function startServer(port: number, projectDir: string) {
   console.log(`Nexus server running at http://localhost:${port}`)
   console.log(`  Project dir: ${projectDir}`)
   console.log(`  File tree: ${fsWatcher.getTree().length} top-level entries`)
-  console.log(`  Git diffs: ${gitService.getCurrentDiffs().length} changes`)
+  const { unstaged: u, staged: s } = gitService.getCurrentDiffs()
+  console.log(`  Git diffs: ${u.length} unstaged, ${s.length} staged`)
 
   return { fastify, workspaceManager, configManager }
 }

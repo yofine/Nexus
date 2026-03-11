@@ -75,6 +75,10 @@ export type ClientEvent =
   | { type: 'git.accept.all' }
   | { type: 'git.discard'; file: string }
   | { type: 'git.discard.all' }
+  | { type: 'git.unstage'; file: string }
+  | { type: 'git.unstage.all' }
+  | { type: 'git.commit'; message: string }
+  | { type: 'git.push' }
   | { type: 'pane.diff.refresh'; paneId: string }
   | { type: 'workspace.save' }
 
@@ -86,9 +90,12 @@ export type ServerEvent =
   | { type: 'pane.added'; pane: PaneState }
   | { type: 'pane.removed'; paneId: string }
   | { type: 'fs.tree'; tree: FileNode[] }
-  | { type: 'git.diff'; diff: FileDiff[] }
+  | { type: 'git.diff'; unstaged: FileDiff[]; staged: FileDiff[] }
+  | { type: 'git.result'; action: string; success: boolean; message: string }
+  | { type: 'git.branchInfo'; branch: string; remote?: string; ahead: number; behind: number }
   | { type: 'pane.diff'; paneId: string; diffs: FileDiff[] }
   | { type: 'pane.activity'; paneId: string; activity: FileActivity }
+  | { type: 'file.activity'; activity: FileActivity }
   | { type: 'workspace.state'; state: WorkspaceState }
 
 // ─── Supporting Types ───────────────────────────────────────
@@ -151,6 +158,12 @@ export interface AgentDefinition {
   yolo_flag?: string
   statusline: boolean
   env?: Record<string, string>
+}
+
+export interface AgentAvailability {
+  installed: boolean
+  bin: string
+  installHint: string
 }
 
 export interface WorkspaceConfig {

@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GitBranch, Share2, Zap } from 'lucide-react'
 import { AgentIcon, getAgentDisplayName } from './AgentIcon'
-import type { ClientEvent, AgentType, RestoreMode, IsolationMode } from '@/types'
+import type { ClientEvent, AgentType, RestoreMode, IsolationMode, AgentAvailability } from '@/types'
+
+const AGENT_TYPES: AgentType[] = ['claudecode', 'opencode', 'qwencode']
 
 interface AddPaneDialogProps {
   isOpen: boolean
@@ -17,6 +19,22 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
   const [restore, setRestore] = useState<RestoreMode>('continue')
   const [isolation, setIsolation] = useState<IsolationMode>('shared')
   const [yolo, setYolo] = useState(false)
+  const [agentAvailability, setAgentAvailability] = useState<Record<string, AgentAvailability> | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    fetch('/api/agents')
+      .then(res => res.json())
+      .then(data => {
+        setAgentAvailability(data)
+        // If current selection is not installed, switch to first installed
+        if (data[agent] && !data[agent].installed) {
+          const firstInstalled = AGENT_TYPES.find(a => data[a]?.installed)
+          if (firstInstalled) setAgent(firstInstalled)
+        }
+      })
+      .catch(() => {})
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -47,7 +65,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
     onClose()
   }
 
-  const agents: AgentType[] = ['claudecode', 'opencode', 'qwencode']
+  const isAgentInstalled = (a: AgentType) => !agentAvailability || agentAvailability[a]?.installed !== false
 
   return (
     <div className="dialog-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
@@ -73,17 +91,24 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
           <div className="form-field">
             <label className="form-label">Agent</label>
             <div className="agent-selector-grid">
-              {agents.map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => setAgent(a)}
-                  className={`agent-selector-btn${agent === a ? ' agent-selector-btn--active' : ''}`}
-                >
-                  <AgentIcon agent={a} size="var(--icon-md)" />
-                  <span>{getAgentDisplayName(a)}</span>
-                </button>
-              ))}
+              {AGENT_TYPES.map((a) => {
+                const installed = isAgentInstalled(a)
+                const hint = agentAvailability?.[a]?.installHint
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => installed && setAgent(a)}
+                    disabled={!installed}
+                    title={!installed ? `Not installed. ${hint}` : undefined}
+                    className={`agent-selector-btn${agent === a ? ' agent-selector-btn--active' : ''}${!installed ? ' agent-selector-btn--disabled' : ''}`}
+                  >
+                    <AgentIcon agent={a} size="var(--icon-md)" />
+                    <span>{getAgentDisplayName(a)}</span>
+                    {!installed && <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: 'auto' }}>Not installed</span>}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
