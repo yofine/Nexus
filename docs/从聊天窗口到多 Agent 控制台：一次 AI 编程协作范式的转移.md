@@ -3,6 +3,7 @@
 今天主流的 AI 开发体验，仍然是人与一个 Agent 围绕同一个任务持续协作。但在真实工作里，我真正需要的是：把复杂需求拆成多个子任务，交给不同 Agent 并行执行，而我只在关键节点做 ⁠Review，并对最终结果进行验收和整合。
 
 所以我想讨论的是 AI 编程协作范式的转移：主流 AI IDE 优化的，仍然是“人与一个 Agent 持续协作”；而我真正需要的，则是把复杂需求拆解后交给多个 Agent 并行执行，自己把工作重心转向编排、⁠Review 和最终验收。
+
 <img width="2200" height="1412" alt="image" src="https://github.com/user-attachments/assets/86c00568-cc7b-40a6-aaa9-5ae373b48c7a" />
 
 ## 当单 Agent 协作开始不够用
@@ -17,6 +18,7 @@
 
 
 我更需要的是：当一个 Agent 在执行时，我可以继续推进别的工作，让人和 AI 真正并行起来。
+
 <img width="2004" height="1410" alt="image" src="https://github.com/user-attachments/assets/7b77c562-656c-4e04-82e1-9f9ba0f29b20" />
 
 
@@ -106,6 +108,7 @@ Review 之后能直接把反馈送回某个 Agent
 而 Web UI 恰好有两个很实际的优势：一是门槛更低，二是交互能力更强。很多事情放在终端里能做，但不代表是最自然的体验；像文件树、diff、Review、评论回流这类操作，放在 Web UI 里会顺手很多。
 
 换句话说，我想做的重点不是“让多个 Agent 跑起来”，而是：当我真的开始同时使用多个 Agent 之后，怎么把它们放进一个顺手、可管理、可审查的工作界面里。
+
 <img width="2000" height="1374" alt="image" src="https://github.com/user-attachments/assets/15c1e6b6-8587-4c60-8c80-d69cff288914" />
 
 
@@ -129,6 +132,7 @@ diff 可以持续看
 
 默认共享工作区，不是因为我低估冲突，而是因为我希望把冲突发现和质量纠偏前移到执行过程中，而不是后置到合并阶段。
 换句话说，共享和隔离不是对立选项，而是同一套多 Agent 工作流里的两种执行策略。
+
 <img width="1800" height="1412" alt="image" src="https://github.com/user-attachments/assets/e8b21d7f-a867-4243-95bf-8efd81a04c8e" />
 
 ## 重塑人与 AI 的生产关系
