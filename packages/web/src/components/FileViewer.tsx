@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createHighlighter, type Highlighter } from 'shiki'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface FileViewerProps {
   filePath: string
@@ -19,6 +21,11 @@ function getHighlighter() {
     })
   }
   return highlighterPromise
+}
+
+function isMarkdown(filePath: string): boolean {
+  const ext = filePath.split('.').pop()?.toLowerCase() || ''
+  return ext === 'md' || ext === 'mdx'
 }
 
 function getLang(filePath: string): string {
@@ -42,12 +49,15 @@ export function FileViewer({ filePath }: FileViewerProps) {
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [viewRaw, setViewRaw] = useState(false)
   const codeRef = useRef<HTMLDivElement>(null)
+  const isMd = useMemo(() => isMarkdown(filePath), [filePath])
 
   useEffect(() => {
     setLoading(true)
     setError(null)
     setHighlightedHtml(null)
+    setViewRaw(false)
 
     fetch(`/api/file?path=${encodeURIComponent(filePath)}`)
       .then((res) => {
@@ -56,6 +66,8 @@ export function FileViewer({ filePath }: FileViewerProps) {
       })
       .then((data: { content: string }) => {
         setContent(data.content)
+        // Skip highlighting for markdown in preview mode
+        if (isMd) return
         // Highlight asynchronously
         const lang = getLang(filePath)
         if (lang) {
@@ -76,7 +88,7 @@ export function FileViewer({ filePath }: FileViewerProps) {
       .finally(() => {
         setLoading(false)
       })
-  }, [filePath])
+  }, [filePath, isMd])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -93,10 +105,31 @@ export function FileViewer({ filePath }: FileViewerProps) {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}
         title={filePath}
       >
-        {filePath}
+        <span>{filePath}</span>
+        {isMd && (
+          <button
+            onClick={() => setViewRaw((v) => !v)}
+            style={{
+              background: 'var(--bg-overlay)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-secondary)',
+              fontSize: 10,
+              padding: '1px 6px',
+              cursor: 'pointer',
+              flexShrink: 0,
+              marginLeft: 8,
+            }}
+          >
+            {viewRaw ? 'Preview' : 'Raw'}
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -113,8 +146,14 @@ export function FileViewer({ filePath }: FileViewerProps) {
           </div>
         )}
 
-        {content !== null && !loading && (
-          highlightedHtml ? (
+        {content !== null && !loading && isMd && !viewRaw && (
+          <div className="markdown-body" style={{ padding: '16px 24px' }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        )}
+
+        {content !== null && !loading && (!isMd || viewRaw) && (
+          highlightedHtml && !viewRaw ? (
             <div
               ref={codeRef}
               className="shiki-wrapper"

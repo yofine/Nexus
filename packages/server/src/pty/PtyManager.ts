@@ -31,7 +31,7 @@ export class PtyManager {
     this.configManager = configManager
   }
 
-  spawn(paneId: string, config: PaneConfig): number {
+  spawn(paneId: string, config: PaneConfig, cols = 80, rows = 24): number {
     if (this.entries.has(paneId)) {
       this.kill(paneId)
     }
@@ -74,8 +74,8 @@ export class PtyManager {
 
     const term = pty.spawn(shell, [], {
       name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
+      cols,
+      rows,
       cwd,
       env,
     })
@@ -161,8 +161,11 @@ export class PtyManager {
 
     let cmd = agentDef.bin
 
-    // Add continue flag if restoring
-    if (config.restore === 'continue' && agentDef.continue_flag) {
+    // Add resume flag with specific session ID
+    if (config.restore === 'resume' && config.sessionId && agentDef.resume_flag) {
+      cmd += ` ${agentDef.resume_flag} ${config.sessionId}`
+    } else if (config.restore === 'continue' && agentDef.continue_flag) {
+      // Add continue flag to resume latest session
       cmd += ` ${agentDef.continue_flag}`
     }
 

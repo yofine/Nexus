@@ -3,7 +3,46 @@ import { GitBranch, Share2, Zap } from 'lucide-react'
 import { AgentIcon, getAgentDisplayName } from './AgentIcon'
 import type { ClientEvent, AgentType, RestoreMode, IsolationMode, AgentAvailability } from '@/types'
 
-const AGENT_TYPES: AgentType[] = ['claudecode', 'opencode', 'qwencode']
+const AGENT_TYPES: AgentType[] = ['claudecode', 'codex', 'opencode', 'kimi-cli', 'qwencode']
+
+/**
+ * Estimate terminal cols/rows from the current agent pane container width.
+ * Uses a hidden canvas to measure the exact monospace character width.
+ */
+function estimateTerminalDimensions(): { cols: number; rows: number } {
+  const FONT_SIZE = 13
+  const FONT_FAMILY = "'Geist Mono', 'JetBrains Mono', monospace"
+  const LINE_HEIGHT = Math.ceil(FONT_SIZE * 1.2)
+  // xterm internal padding: 4px left + scrollbar ~14px right
+  const XTERM_PADDING = 18
+
+  // Measure character width using canvas
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  let charWidth = FONT_SIZE * 0.6 // fallback
+  if (ctx) {
+    ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`
+    charWidth = ctx.measureText('W').width
+  }
+
+  // Try to read the agent pane container width from localStorage or use default
+  let containerWidth = 480 - 18 // default agent pane width minus padding
+  try {
+    const raw = localStorage.getItem('nexus-panel-widths')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed.agents) containerWidth = parsed.agents - XTERM_PADDING
+    }
+  } catch { /* ignore */ }
+
+  // Estimate a reasonable terminal height (60vh clamped)
+  const termHeight = Math.min(800, Math.max(300, window.innerHeight * 0.6)) - 40 // minus header
+
+  const cols = Math.max(40, Math.floor(containerWidth / charWidth))
+  const rows = Math.max(10, Math.floor(termHeight / LINE_HEIGHT))
+
+  return { cols, rows }
+}
 
 interface AddPaneDialogProps {
   isOpen: boolean
@@ -16,7 +55,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
   const [agent, setAgent] = useState<AgentType>('claudecode')
   const [workdir, setWorkdir] = useState('')
   const [task, setTask] = useState('')
-  const [restore, setRestore] = useState<RestoreMode>('continue')
+  const [restore, setRestore] = useState<RestoreMode>('restart')
   const [isolation, setIsolation] = useState<IsolationMode>('shared')
   const [yolo, setYolo] = useState(false)
   const [agentAvailability, setAgentAvailability] = useState<Record<string, AgentAvailability> | null>(null)
@@ -42,6 +81,10 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
     e.preventDefault()
     if (!name.trim()) return
 
+    // Estimate initial PTY dimensions from the agent pane container width
+    // so the PTY spawns with correct cols from the start (avoids 80-col misalignment)
+    const estimatedDims = estimateTerminalDimensions()
+
     send({
       type: 'pane.create',
       config: {
@@ -52,6 +95,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
         restore,
         isolation,
         yolo: yolo || undefined,
+        ...estimatedDims,
       },
     })
 
@@ -59,7 +103,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
     setName('')
     setWorkdir('')
     setTask('')
-    setRestore('continue')
+    setRestore('restart')
     setIsolation('shared')
     setYolo(false)
     onClose()
@@ -131,7 +175,6 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
                 onChange={(e) => setRestore(e.target.value as RestoreMode)}
                 className="form-input form-select"
               >
-                <option value="continue">Continue</option>
                 <option value="restart">Restart</option>
                 <option value="manual">Manual</option>
               </select>

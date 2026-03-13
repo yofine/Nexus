@@ -6,12 +6,14 @@ interface UseKeyboardShortcutsOptions {
   send: (event: ClientEvent) => void
   onToggleCommandPalette: () => void
   onAddPane: () => void
+  onOpenSettings: () => void
 }
 
 export function useKeyboardShortcuts({
   send,
   onToggleCommandPalette,
   onAddPane,
+  onOpenSettings,
 }: UseKeyboardShortcutsOptions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -26,6 +28,13 @@ export function useKeyboardShortcuts({
       if (mod && e.key === 'k') {
         e.preventDefault()
         onToggleCommandPalette()
+        return
+      }
+
+      // Cmd/Ctrl+, — settings (always works)
+      if (mod && e.key === ',') {
+        e.preventDefault()
+        onOpenSettings()
         return
       }
 
@@ -71,5 +80,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [send, onToggleCommandPalette, onAddPane])
+  }, [send, onToggleCommandPalette, onAddPane, onOpenSettings])
 }

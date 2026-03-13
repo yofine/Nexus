@@ -1,14 +1,22 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, memo } from 'react'
 import {
   ChevronDown,
   ChevronRight,
   GitBranch,
   RotateCcw,
   X,
+  Play,
 } from 'lucide-react'
 import { Terminal } from './Terminal'
 import { AgentIcon, getAgentDisplayName, getAgentColor } from './AgentIcon'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import {
+  pauseTerminal,
+  resumeTerminal,
+  refitTerminal,
+  scrollTerminalToBottom,
+  getTerminalDimensions,
+} from '@/stores/terminalRegistry'
 import type { PaneState, ClientEvent } from '@/types'
 
 interface AgentPaneProps {
@@ -26,10 +34,47 @@ const statusColors: Record<string, string> = {
   error: 'var(--status-error)',
 }
 
-export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) {
+export const AgentPane = memo(function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) {
   const paneDiffs = useWorkspaceStore((s) => s.paneDiffs[pane.id])
   const { openReviewTab } = useWorkspaceStore()
   const diffCount = paneDiffs?.length ?? 0
+  const prevExpandedRef = useRef(isExpanded)
+
+  // Handle pause/resume when expand state changes
+  useEffect(() => {
+    const wasExpanded = prevExpandedRef.current
+    prevExpandedRef.current = isExpanded
+
+    if (isExpanded && !wasExpanded) {
+      // Expanding: first refit to get correct dimensions, then resume
+      // (resume does reset + replay, which needs correct cols to render properly)
+      // Use double-rAF to ensure the container has laid out with real dimensions
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          refitTerminal(pane.id)
+          // Send resize to server immediately (don't wait for debounced ResizeObserver)
+          const dims = getTerminalDimensions(pane.id)
+          if (dims) {
+            send({ type: 'terminal.resize', paneId: pane.id, cols: dims.cols, rows: dims.rows })
+          }
+          resumeTerminal(pane.id)
+          scrollTerminalToBottom(pane.id)
+        })
+      })
+    } else if (!isExpanded && wasExpanded) {
+      // Collapsing: pause terminal writes to prevent zero-size rendering
+      pauseTerminal(pane.id)
+    }
+  }, [isExpanded, pane.id])
+
+  // Initial state: if pane mounts collapsed, pause immediately
+  useEffect(() => {
+    if (!isExpanded) {
+      pauseTerminal(pane.id)
+    }
+    // no cleanup needed — pane removal clears history via clearTerminalHistory
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pane.id])
 
   const handleTerminalData = useCallback(
     (data: string) => {
@@ -52,8 +97,21 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
 
   const handleRestart = (e: React.MouseEvent) => {
     e.stopPropagation()
-    send({ type: 'pane.restart', paneId: pane.id, mode: pane.restore })
+    send({ type: 'pane.restart', paneId: pane.id, mode: 'restart' })
   }
+
+  const handleResume = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const sessionId = pane.meta.sessionId || pane.sessionId
+    if (sessionId) {
+      send({ type: 'pane.restart', paneId: pane.id, mode: 'resume', sessionId })
+    } else {
+      send({ type: 'pane.restart', paneId: pane.id, mode: 'continue' })
+    }
+  }
+
+  const hasSessionId = !!(pane.meta.sessionId || pane.sessionId)
+  const isStopped = pane.status === 'stopped' || pane.status === 'error'
 
   return (
     <div
@@ -165,10 +223,28 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
             )}
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-xs)', flexShrink: 0 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-xs)', flexShrink: 0, alignItems: 'center' }}>
+            {/* Resume button — shown when pane is stopped/error or has a session ID */}
+            {(isStopped || hasSessionId) && (
+              <button
+                onClick={handleResume}
+                title={hasSessionId
+                  ? `Resume session ${(pane.meta.sessionId || pane.sessionId || '').slice(0, 12)}`
+                  : 'Resume (--continue)'}
+                className="pane-action-btn"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  color: 'var(--accent-primary)',
+                }}
+              >
+                <Play size={13} fill="currentColor" />
+              </button>
+            )}
             <button
               onClick={handleRestart}
-              title="Restart"
+              title="Restart (new session)"
               className="pane-action-btn"
             >
               <RotateCcw className="icon-sm" style={{ color: 'var(--text-muted)' }} />
@@ -190,7 +266,7 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
         )}
       </div>
 
-      {/* Terminal body — always mounted to keep xterm instance alive and cols in sync */}
+      {/* Terminal body — always mounted to keep xterm instance alive */}
       <div style={isExpanded ? {
         flex: 1,
         minHeight: 0,
@@ -210,4 +286,4 @@ export function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) 
       </div>
     </div>
   )
-}
+})

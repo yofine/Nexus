@@ -36,6 +36,29 @@ export function AgentIcon({ agent, size = 16, className }: AgentIconProps) {
     )
   }
 
+  if (normalized === 'kimi-cli' || normalized === 'kimi' || normalized === 'kimicode') {
+    return (
+      <svg className={className} style={sizeStyle} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="#6366F1" strokeWidth="1.5"/>
+        <path d="M8 10c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#6366F1" strokeWidth="1.5" strokeLinecap="round"/>
+        <circle cx="9.5" cy="12.5" r="1.2" fill="#6366F1"/>
+        <circle cx="14.5" cy="12.5" r="1.2" fill="#6366F1"/>
+        <path d="M9.5 16c1 1.2 3.5 1.2 5 0" stroke="#6366F1" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    )
+  }
+
+  if (normalized === 'qwencode' || normalized === 'qwen') {
+    return (
+      <svg className={className} style={sizeStyle} viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="18" height="18" rx="4" stroke="#7C3AED" strokeWidth="1.5"/>
+        <path d="M8 12h8M12 8v8" stroke="#7C3AED" strokeWidth="1.5" strokeLinecap="round"/>
+        <circle cx="8" cy="8" r="1.2" fill="#7C3AED"/>
+        <circle cx="16" cy="16" r="1.2" fill="#7C3AED"/>
+      </svg>
+    )
+  }
+
   if (normalized === 'gemini' || normalized === 'google') {
     return (
       <svg className={className} style={sizeStyle} viewBox="0 0 24 24" fill="none">
@@ -76,8 +99,13 @@ export function getAgentDisplayName(agent: string): string {
   const map: Record<string, string> = {
     claudecode: 'Claude Code',
     claude: 'Claude Code',
-    opencode: 'OpenCode',
     codex: 'Codex',
+    opencode: 'OpenCode',
+    'kimi-cli': 'Kimi Code',
+    kimi: 'Kimi Code',
+    kimicode: 'Kimi Code',
+    qwencode: 'Qwen Code',
+    qwen: 'Qwen Code',
     openai: 'OpenAI',
     gemini: 'Gemini',
     aider: 'Aider',
@@ -91,8 +119,12 @@ export function getAgentColor(agent: string): string {
   const map: Record<string, string> = {
     claudecode: '#D97757',
     claude: '#D97757',
-    opencode: '#58A6FF',
     codex: '#10A37F',
+    opencode: '#58A6FF',
+    'kimi-cli': '#6366F1',
+    kimi: '#6366F1',
+    qwencode: '#7C3AED',
+    qwen: '#7C3AED',
     openai: '#10A37F',
     gemini: '#8B5CF6',
     aider: '#22C55E',

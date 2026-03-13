@@ -1,8 +1,8 @@
 // ─── Pane & Agent Types ─────────────────────────────────────
 
 export type PaneStatus = 'running' | 'waiting' | 'idle' | 'stopped' | 'error'
-export type RestoreMode = 'continue' | 'restart' | 'manual'
-export type AgentType = 'claudecode' | 'opencode' | 'kimi-cli' | 'qwencode' | '__shell__'
+export type RestoreMode = 'continue' | 'restart' | 'manual' | 'resume'
+export type AgentType = 'claudecode' | 'codex' | 'opencode' | 'kimi-cli' | 'qwencode' | '__shell__'
 export type IsolationMode = 'shared' | 'worktree'
 
 export interface PaneMeta {
@@ -19,6 +19,7 @@ export interface FileActivity {
   file: string
   action: FileAction
   timestamp: number
+  diff?: string   // unified diff snapshot captured at the moment of change
 }
 
 export interface PaneState {
@@ -32,6 +33,7 @@ export interface PaneState {
   yolo?: boolean
   branch?: string
   worktreePath?: string
+  sessionId?: string
   status: PaneStatus
   pid?: number
   meta: PaneMeta
@@ -53,7 +55,7 @@ export type ClientEvent =
   | { type: 'terminal.resize'; paneId: string; cols: number; rows: number }
   | { type: 'pane.create'; config: PaneCreateConfig }
   | { type: 'pane.close'; paneId: string }
-  | { type: 'pane.restart'; paneId: string; mode: RestoreMode }
+  | { type: 'pane.restart'; paneId: string; mode: RestoreMode; sessionId?: string }
   | { type: 'broadcast.send'; groupId: string; message: string }
   | { type: 'task.dispatch'; tasks: TaskItem[] }
   | { type: 'review.comment'; paneId: string; comment: ReviewComment }
@@ -68,6 +70,7 @@ export type ClientEvent =
   | { type: 'git.push' }
   | { type: 'pane.diff.refresh'; paneId: string }
   | { type: 'workspace.save' }
+  | { type: 'session.list'; paneId?: string }
 
 // Server → Client
 export type ServerEvent =
@@ -84,6 +87,7 @@ export type ServerEvent =
   | { type: 'pane.activity'; paneId: string; activity: FileActivity }
   | { type: 'file.activity'; activity: FileActivity }
   | { type: 'workspace.state'; state: WorkspaceState }
+  | { type: 'session.list'; paneId?: string; sessions: SessionInfo[] }
 
 // ─── Supporting Types ───────────────────────────────────────
 
@@ -95,6 +99,8 @@ export interface PaneCreateConfig {
   restore: RestoreMode
   isolation?: IsolationMode
   yolo?: boolean
+  cols?: number
+  rows?: number
 }
 
 export interface ReviewComment {
@@ -125,8 +131,111 @@ export interface FileDiff {
   paneId?: string
 }
 
+export interface SessionInfo {
+  sessionId: string
+  paneId: string
+  paneName: string
+  agent: AgentType
+  timestamp: string
+  costUsd?: number
+  contextUsedPct?: number
+  model?: string
+}
+
 export interface AgentAvailability {
   installed: boolean
   bin: string
   installHint: string
+}
+
+// ─── Dependency Graph Types ─────────────────────────────────
+
+export interface DepNode {
+  id: string        // relative file path
+  imports: string[] // resolved relative paths this file imports
+}
+
+export interface DepGraph {
+  nodes: DepNode[]
+  root: string
+}
+
+// ─── Config Types ──────────────────────────────────────────
+
+export interface GlobalConfig {
+  version: string
+  defaults: {
+    shell: string
+    scrollback_lines: number
+    grid_columns: number
+    history_retention_days: number
+    theme: string
+  }
+  agents: Record<string, AgentDefinition>
+}
+
+export interface AgentDefinition {
+  bin: string
+  continue_flag: string
+  resume_flag?: string
+  yolo_flag?: string
+  statusline: boolean
+  env?: Record<string, string>
+}
+
+// ─── Replay Types ────────────────────────────────────────────
+
+export type ReplayEventType = 'terminal' | 'status' | 'meta' | 'activity'
+
+export interface ReplayEvent {
+  t: number
+  type: ReplayEventType
+  paneId: string
+  data?: string
+  status?: PaneStatus
+  meta?: PaneMeta
+  activity?: FileActivity
+}
+
+export interface ReplayTurn {
+  id: string
+  paneId: string
+  paneName: string
+  agent: AgentType
+  startedAt: number
+  endedAt: number | null
+  task?: string
+  events: ReplayEvent[]
+  summary: {
+    filesRead: number
+    filesEdited: number
+    filesCreated: number
+    terminalBytes: number
+    durationMs: number
+  }
+}
+
+export interface ReplaySession {
+  id: string
+  startedAt: number
+  endedAt: number | null
+  projectDir: string
+  projectName: string
+  panes: Array<{
+    id: string
+    name: string
+    agent: AgentType
+    task?: string
+  }>
+  turns: ReplayTurn[]
+}
+
+export interface ReplaySessionSummary {
+  id: string
+  startedAt: number
+  endedAt: number | null
+  projectName: string
+  turnCount: number
+  paneCount: number
+  totalDurationMs: number
 }

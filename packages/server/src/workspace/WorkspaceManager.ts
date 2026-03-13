@@ -9,6 +9,7 @@ import type {
   FileNode,
   FileDiff,
   FileActivity,
+  SessionInfo,
 } from '../types.ts'
 import type { GitDiffResult } from '../git/GitService.ts'
 import { PtyManager } from '../pty/PtyManager.ts'
@@ -82,8 +83,12 @@ export class WorkspaceManager {
     }
 
     // Restore panes from config (skip failures — stale panes from previous sessions)
+    // Auto-resume: if a pane has a saved sessionId, always use --resume regardless of original restore mode
     let failCount = 0
     for (const paneConfig of wsConfig.panes) {
+      if (paneConfig.sessionId && paneConfig.agent !== '__shell__') {
+        paneConfig.restore = 'resume'
+      }
       try {
         this.spawnPane(paneConfig)
       } catch (err) {
@@ -116,9 +121,13 @@ export class WorkspaceManager {
     const id = isShell ? '__shell__' : nextPaneId()
     const isolation = createConfig.isolation || 'shared'
 
+    // Extract cols/rows (transient, not persisted in PaneConfig)
+    const { cols, rows, ...rest } = createConfig
+
     const config: PaneConfig = {
       id,
-      ...createConfig,
+      ...rest,
+      yolo: rest.yolo || false,
       isolation,
     }
 
@@ -135,7 +144,7 @@ export class WorkspaceManager {
     }
 
     try {
-      const pane = this.spawnPane(config)
+      const pane = this.spawnPane(config, cols, rows)
 
       // Start per-pane git service for worktree panes
       if (isolation === 'worktree' && config.worktreePath) {
@@ -172,11 +181,16 @@ export class WorkspaceManager {
     this.removePaneFromConfig(paneId)
   }
 
-  restartPane(paneId: string, mode: RestoreMode): void {
+  restartPane(paneId: string, mode: RestoreMode, sessionId?: string): void {
     const existingState = this.panes.get(paneId)
     if (!existingState) return
 
     this.ptyManager.kill(paneId)
+
+    // For resume mode, use the provided sessionId or fall back to the last known one
+    const resolvedSessionId = mode === 'resume'
+      ? (sessionId || existingState.sessionId || existingState.meta.sessionId)
+      : undefined
 
     const config: PaneConfig = {
       id: paneId,
@@ -186,11 +200,14 @@ export class WorkspaceManager {
       task: existingState.task,
       restore: mode,
       isolation: existingState.isolation,
+      yolo: existingState.yolo || false,
       worktreePath: existingState.worktreePath,
       branch: existingState.branch,
+      sessionId: resolvedSessionId,
     }
 
     this.spawnPane(config)
+    this.updatePaneConfigSessionId(paneId, resolvedSessionId)
   }
 
   writeToPane(paneId: string, data: string): void {
@@ -270,8 +287,8 @@ export class WorkspaceManager {
     }
   }
 
-  private spawnPane(config: PaneConfig): PaneState {
-    const pid = this.ptyManager.spawn(config.id, config)
+  private spawnPane(config: PaneConfig, cols?: number, rows?: number): PaneState {
+    const pid = this.ptyManager.spawn(config.id, config, cols || 80, rows || 24)
 
     const pane: PaneState = {
       id: config.id,
@@ -281,8 +298,10 @@ export class WorkspaceManager {
       task: config.task,
       restore: config.restore,
       isolation: config.isolation || 'shared',
+      yolo: config.yolo || false,
       branch: config.branch,
       worktreePath: config.worktreePath,
+      sessionId: config.sessionId,
       status: 'running',
       pid,
       meta: {},
@@ -309,6 +328,11 @@ export class WorkspaceManager {
       const p = this.panes.get(config.id)
       if (p) {
         p.meta = meta
+        // Persist sessionId from statusline to PaneState and config.yaml for auto-resume
+        if (meta.sessionId && meta.sessionId !== p.sessionId) {
+          p.sessionId = meta.sessionId
+          this.updatePaneConfigSessionId(config.id, meta.sessionId)
+        }
         this.emit('onPaneMeta', config.id, meta)
       }
     })
@@ -345,6 +369,54 @@ export class WorkspaceManager {
       wsConfig.panes.push(config)
       this.configManager.saveWorkspaceConfig(wsConfig)
     }
+  }
+
+  private updatePaneConfigSessionId(paneId: string, sessionId?: string): void {
+    const wsConfig = this.configManager.loadWorkspaceConfig()
+    if (wsConfig) {
+      const paneConfig = wsConfig.panes.find((p) => p.id === paneId)
+      if (paneConfig) {
+        paneConfig.sessionId = sessionId
+        this.configManager.saveWorkspaceConfig(wsConfig)
+      }
+    }
+  }
+
+  getSessionList(paneId?: string): SessionInfo[] {
+    const sessions: SessionInfo[] = []
+    for (const pane of this.panes.values()) {
+      if (pane.agent === '__shell__') continue
+      if (paneId && pane.id !== paneId) continue
+      if (pane.meta.sessionId || pane.sessionId) {
+        sessions.push({
+          sessionId: (pane.meta.sessionId || pane.sessionId)!,
+          paneId: pane.id,
+          paneName: pane.name,
+          agent: pane.agent,
+          timestamp: pane.startedAt || new Date().toISOString(),
+          costUsd: pane.meta.costUsd,
+          contextUsedPct: pane.meta.contextUsedPct,
+          model: pane.meta.model,
+        })
+      }
+    }
+    // Also include sessions from config that aren't currently running
+    const wsConfig = this.configManager.loadWorkspaceConfig()
+    if (wsConfig) {
+      for (const pc of wsConfig.panes) {
+        if (pc.sessionId && !sessions.find((s) => s.sessionId === pc.sessionId)) {
+          if (paneId && pc.id !== paneId) continue
+          sessions.push({
+            sessionId: pc.sessionId,
+            paneId: pc.id,
+            paneName: pc.name,
+            agent: pc.agent,
+            timestamp: '',
+          })
+        }
+      }
+    }
+    return sessions
   }
 
   private removePaneFromConfig(paneId: string): void {

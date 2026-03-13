@@ -1,9 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { execSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import yaml from 'js-yaml'
 import type { GlobalConfig, WorkspaceConfig, AgentDefinition, AgentAvailability } from '../types.ts'
+
+const execFileAsync = promisify(execFile)
 
 const GLOBAL_DIR = path.join(os.homedir(), '.nexus')
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_DIR, 'config.yaml')
@@ -21,6 +24,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     claudecode: {
       bin: 'claude',
       continue_flag: '--continue',
+      resume_flag: '--resume',
       yolo_flag: '--dangerously-skip-permissions',
       statusline: true,
       env: {},
@@ -72,11 +76,14 @@ export class ConfigManager {
       }
     } else {
       this.globalConfig = { ...DEFAULT_GLOBAL_CONFIG }
-      const detected = this.detectAgents()
-      if (Object.keys(detected).length > 0) {
-        this.globalConfig.agents = { ...this.globalConfig.agents, ...detected }
-      }
+      // Agent detection is async now — save defaults first, detect in background
       this.saveGlobalConfig(this.globalConfig)
+      this.detectAgentsAsync().then((detected) => {
+        if (Object.keys(detected).length > 0 && this.globalConfig) {
+          this.globalConfig.agents = { ...this.globalConfig.agents, ...detected }
+          this.saveGlobalConfig(this.globalConfig)
+        }
+      }).catch(() => { /* ignore detection failure */ })
     }
 
     return this.globalConfig
@@ -134,27 +141,33 @@ export class ConfigManager {
     return config
   }
 
-  detectAgents(): Record<string, AgentDefinition> {
+  private async detectAgentsAsync(): Promise<Record<string, AgentDefinition>> {
     const agents: Record<string, AgentDefinition> = {}
 
     const agentBins: Array<{ key: string; bin: string; flag: string; statusline: boolean }> = [
       { key: 'claudecode', bin: 'claude', flag: '--continue', statusline: true },
+      { key: 'codex', bin: 'codex', flag: '', statusline: false },
       { key: 'opencode', bin: 'opencode', flag: '--continue', statusline: false },
       { key: 'kimi-cli', bin: 'kimi', flag: '--continue', statusline: false },
       { key: 'qwencode', bin: 'qwen-code', flag: '--continue', statusline: false },
     ]
 
-    for (const agent of agentBins) {
-      try {
-        execSync(`which ${agent.bin}`, { stdio: 'ignore' })
+    const results = await Promise.allSettled(
+      agentBins.map(async (agent) => {
+        await execFileAsync('which', [agent.bin], { timeout: 3000 })
+        return agent
+      })
+    )
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        const agent = result.value
         agents[agent.key] = {
           bin: agent.bin,
           continue_flag: agent.flag,
           statusline: agent.statusline,
           env: {},
         }
-      } catch {
-        // Agent not installed, skip
       }
     }
 
@@ -187,31 +200,43 @@ export class ConfigManager {
    * Check which agents are available (installed) on the system.
    * Returns a record of agentType → { installed, bin, installHint }
    */
-  checkAgentAvailability(): Record<string, AgentAvailability> {
+  async checkAgentAvailability(): Promise<Record<string, AgentAvailability>> {
     const global = this.loadGlobalConfig()
     const knownAgents: Array<{ key: string; bin: string; installHint: string }> = [
       { key: 'claudecode', bin: 'claude', installHint: 'npm install -g @anthropic-ai/claude-code' },
+      { key: 'codex', bin: 'codex', installHint: 'npm install -g @openai/codex' },
       { key: 'opencode', bin: 'opencode', installHint: 'go install github.com/opencode-ai/opencode@latest' },
       { key: 'kimi-cli', bin: 'kimi', installHint: 'pip install kimi-cli' },
       { key: 'qwencode', bin: 'qwen-code', installHint: 'pip install qwen-code' },
     ]
 
-    const result: Record<string, AgentAvailability> = {}
+    const checks = await Promise.allSettled(
+      knownAgents.map(async (agent) => {
+        const def = global.agents[agent.key]
+        const bin = def?.bin || agent.bin
+        try {
+          await execFileAsync('which', [bin], { timeout: 3000 })
+          return { ...agent, bin, installed: true }
+        } catch {
+          return { ...agent, bin, installed: false }
+        }
+      })
+    )
 
-    for (const agent of knownAgents) {
-      const def = global.agents[agent.key]
-      const bin = def?.bin || agent.bin
-      let installed = false
-      try {
-        execSync(`which ${bin}`, { stdio: 'ignore' })
-        installed = true
-      } catch {
-        // not installed
+    const result: Record<string, AgentAvailability> = {}
+    for (const check of checks) {
+      if (check.status === 'fulfilled') {
+        const { key, bin, installHint, installed } = check.value
+        result[key] = { installed, bin, installHint }
       }
-      result[agent.key] = { installed, bin, installHint: agent.installHint }
     }
 
     return result
+  }
+
+  updateGlobalConfig(config: GlobalConfig): void {
+    this.globalConfig = config
+    this.saveGlobalConfig(config)
   }
 
   getProjectDir(): string {

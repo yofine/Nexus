@@ -1,13 +1,14 @@
 import { create } from 'zustand'
-import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode, FileActivity, FileAction } from '@/types'
+import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode, FileActivity, FileAction, DepGraph } from '@/types'
 
 export interface EditorTab {
   id: string
-  type: 'file' | 'review' | 'activity'
+  type: 'file' | 'review' | 'activity' | 'replay'
   label: string
   filePath?: string
   paneId?: string   // null/undefined = workspace (shared) review; set = worktree pane review
   pinned?: boolean
+  sessionId?: string // for replay tabs
 }
 
 export interface ActivityEntry {
@@ -44,6 +45,9 @@ interface WorkspaceStore {
   activities: ActivityEntry[]
   paneCurrentFile: Record<string, { file: string; action: FileAction }>
 
+  // Dependency graph
+  depGraph: DepGraph | null
+
   // Tab system
   tabs: EditorTab[]
   activeTabId: string | null
@@ -60,14 +64,17 @@ interface WorkspaceStore {
   setFileTree: (tree: FileNode[]) => void
   setGitDiffs: (diffs: FileDiff[]) => void
   setGitStagedDiffs: (diffs: FileDiff[]) => void
+  setGitAllDiffs: (diffs: FileDiff[], staged: FileDiff[]) => void
   setGitBranchInfo: (info: { branch: string; remote?: string; ahead: number; behind: number }) => void
   setPaneDiffs: (paneId: string, diffs: FileDiff[]) => void
   removePaneDiffs: (paneId: string) => void
   setDiffViewPaneId: (paneId: string | null) => void
+  setDepGraph: (graph: DepGraph) => void
   addActivity: (paneId: string, activity: FileActivity) => void
   addFileActivity: (activity: FileActivity) => void
   openFileTab: (path: string) => void
   openReviewTab: (paneId?: string, paneName?: string) => void
+  openReplayTab: (sessionId?: string) => void
   closeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
 }
@@ -87,6 +94,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   diffViewPaneId: null,
   activities: [],
   paneCurrentFile: {},
+  depGraph: null,
   tabs: [
     { id: 'tab:activity', type: 'activity', label: 'Activity', pinned: true },
     { id: 'review:workspace', type: 'review', label: 'Review', pinned: true },
@@ -138,18 +146,28 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     }),
 
   updatePaneStatus: (paneId, status) =>
-    set((state) => ({
-      panes: state.panes.map((p) =>
-        p.id === paneId ? { ...p, status } : p
-      ),
-    })),
+    set((state) => {
+      const idx = state.panes.findIndex((p) => p.id === paneId)
+      if (idx === -1 || state.panes[idx].status === status) return state
+      const panes = state.panes.slice()
+      panes[idx] = { ...panes[idx], status }
+      return { panes }
+    }),
 
   updatePaneMeta: (paneId, meta) =>
-    set((state) => ({
-      panes: state.panes.map((p) =>
-        p.id === paneId ? { ...p, meta: { ...p.meta, ...meta } } : p
-      ),
-    })),
+    set((state) => {
+      const idx = state.panes.findIndex((p) => p.id === paneId)
+      if (idx === -1) return state
+      const existing = state.panes[idx].meta
+      // Skip update if values haven't actually changed
+      const hasChange = Object.keys(meta).some(
+        (k) => (meta as Record<string, unknown>)[k] !== (existing as Record<string, unknown>)[k]
+      )
+      if (!hasChange) return state
+      const panes = state.panes.slice()
+      panes[idx] = { ...panes[idx], meta: { ...existing, ...meta } }
+      return { panes }
+    }),
 
   setActivePaneId: (paneId) => set({ activePaneId: paneId }),
 
@@ -160,6 +178,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   setGitDiffs: (gitDiffs) => set({ gitDiffs }),
 
   setGitStagedDiffs: (gitStagedDiffs) => set({ gitStagedDiffs }),
+
+  setGitAllDiffs: (gitDiffs, gitStagedDiffs) => set({ gitDiffs, gitStagedDiffs }),
 
   setGitBranchInfo: (gitBranchInfo) => set({ gitBranchInfo }),
 
@@ -178,6 +198,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     }),
 
   setDiffViewPaneId: (diffViewPaneId) => set({ diffViewPaneId }),
+
+  setDepGraph: (depGraph) => set({ depGraph }),
 
   addActivity: (paneId, activity) =>
     set((state) => {
@@ -262,6 +284,20 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
         return { activeTabId: existing.id }
       }
       const tab: EditorTab = { id: tabId, type: 'review', label: paneName || 'Review', paneId }
+      return { tabs: [...state.tabs, tab], activeTabId: tab.id }
+    }),
+
+  openReplayTab: (sessionId?: string) =>
+    set((state) => {
+      const tabId = sessionId ? `replay:${sessionId}` : 'tab:replay'
+      const existing = state.tabs.find((t) => t.id === tabId)
+      if (existing) return { activeTabId: existing.id }
+      const tab: EditorTab = {
+        id: tabId,
+        type: 'replay',
+        label: sessionId ? 'Replay' : 'Replay History',
+        sessionId,
+      }
       return { tabs: [...state.tabs, tab], activeTabId: tab.id }
     }),
 

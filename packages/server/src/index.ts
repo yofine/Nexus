@@ -3,6 +3,7 @@ import fastifyWebsocket from '@fastify/websocket'
 import fastifyStatic from '@fastify/static'
 import path from 'node:path'
 import fs from 'node:fs'
+import yaml from 'js-yaml'
 import { fileURLToPath } from 'node:url'
 import { ConfigManager } from './workspace/ConfigManager.ts'
 import { WorkspaceManager } from './workspace/WorkspaceManager.ts'
@@ -10,6 +11,9 @@ import { AgentsYamlWriter } from './workspace/AgentsYamlWriter.ts'
 import { FsWatcher } from './fs/FsWatcher.ts'
 import { GitService } from './git/GitService.ts'
 import { setupWsHandlers } from './ws/handlers.ts'
+import { DependencyAnalyzer } from './deps/DependencyAnalyzer.ts'
+import { SessionRecorder } from './history/SessionRecorder.ts'
+import type { GlobalConfig } from './types.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -33,6 +37,23 @@ export async function startServer(port: number, projectDir: string) {
     onPaneMeta: () => agentsWriter.update(workspaceManager.getPanes()),
   })
 
+  // Session recorder — records replay history
+  const wsConfig = configManager.loadWorkspaceConfig()
+  const recorder = new SessionRecorder(projectDir, wsConfig?.name || 'Nexus')
+
+  workspaceManager.onEvents({
+    onPaneAdded: (pane) => recorder.onPaneAdded(pane),
+    onPaneRemoved: (paneId) => recorder.onPaneRemoved(paneId),
+    onPaneStatus: (paneId, status) => {
+      const panes = workspaceManager.getPanes()
+      const pane = panes.find((p) => p.id === paneId)
+      recorder.onPaneStatus(paneId, status, pane)
+    },
+    onPaneMeta: (paneId, meta) => recorder.onPaneMeta(paneId, meta),
+    onTerminalData: (paneId, data) => recorder.onTerminalData(paneId, data),
+    onPaneActivity: (paneId, activity) => recorder.onPaneActivity(paneId, activity),
+  })
+
   // File system watcher
   const fsWatcher = new FsWatcher(projectDir)
   fsWatcher.onTreeChange((tree) => {
@@ -40,15 +61,25 @@ export async function startServer(port: number, projectDir: string) {
   })
   fsWatcher.onFileChange((activity) => {
     workspaceManager.emitFileActivity(activity)
+    // Also feed file changes to session recorder for diff capture
+    recorder.onFileActivityForReplay(activity)
   })
-  fsWatcher.start()
+  try {
+    fsWatcher.start()
+  } catch (err) {
+    console.warn('[FsWatcher] Failed to start file watcher:', (err as Error).message)
+  }
 
   // Git service
   const gitService = new GitService(projectDir)
   gitService.onDiffChange((result) => {
     workspaceManager.emitGitDiff(result)
   })
-  await gitService.start()
+  try {
+    await gitService.start()
+  } catch (err) {
+    console.warn('[GitService] Failed to start git service:', (err as Error).message)
+  }
 
   // WebSocket
   await fastify.register(fastifyWebsocket)
@@ -87,7 +118,57 @@ export async function startServer(port: number, projectDir: string) {
 
   // Agent availability endpoint
   fastify.get('/api/agents', async () => {
-    return configManager.checkAgentAvailability()
+    return await configManager.checkAgentAvailability()
+  })
+
+  // Global config endpoints
+  fastify.get('/api/config', async () => {
+    return configManager.loadGlobalConfig()
+  })
+
+  fastify.put('/api/config', async (request, reply) => {
+    try {
+      const config = request.body as GlobalConfig
+      configManager.updateGlobalConfig(config)
+      return { success: true }
+    } catch (err) {
+      reply.code(400)
+      return { error: 'Invalid config' }
+    }
+  })
+
+  // Replay history endpoints
+  fastify.get('/api/replay/sessions', async () => {
+    return SessionRecorder.listSessions(projectDir)
+  })
+
+  fastify.get('/api/replay/sessions/:sessionId', async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const session = SessionRecorder.getSession(projectDir, sessionId)
+    if (!session) { reply.code(404); return { error: 'Session not found' } }
+    return session
+  })
+
+  fastify.get('/api/replay/sessions/:sessionId/turns/:turnId', async (request, reply) => {
+    const { sessionId, turnId } = request.params as { sessionId: string; turnId: string }
+    const turn = SessionRecorder.getTurn(projectDir, sessionId, turnId)
+    if (!turn) { reply.code(404); return { error: 'Turn not found' } }
+    return turn
+  })
+
+  // Dependency graph endpoint — cached with TTL to avoid repeated full-scan
+  let depGraphCache: { graph: ReturnType<DependencyAnalyzer['analyze']>; ts: number } | null = null
+  const DEP_CACHE_TTL = 30_000 // 30s
+
+  fastify.get('/api/deps', async () => {
+    const now = Date.now()
+    if (depGraphCache && now - depGraphCache.ts < DEP_CACHE_TTL) {
+      return depGraphCache.graph
+    }
+    const analyzer = new DependencyAnalyzer(projectDir)
+    const graph = analyzer.analyze()
+    depGraphCache = { graph, ts: now }
+    return graph
   })
 
   // File read endpoint
@@ -121,9 +202,37 @@ export async function startServer(port: number, projectDir: string) {
     }
   })
 
+  // Notes CRUD — persisted to .nexus/notes.yaml
+  const notesPath = path.join(projectDir, '.nexus', 'notes.yaml')
+
+  fastify.get('/api/notes', async () => {
+    try {
+      const raw = fs.readFileSync(notesPath, 'utf-8')
+      const data = yaml.load(raw) as { notes?: unknown[] }
+      return { notes: data?.notes || [] }
+    } catch {
+      return { notes: [] }
+    }
+  })
+
+  fastify.put('/api/notes', async (request, reply) => {
+    try {
+      const { notes } = request.body as { notes: unknown[] }
+      fs.mkdirSync(path.dirname(notesPath), { recursive: true })
+      fs.writeFileSync(notesPath, yaml.dump({ notes }, { lineWidth: -1 }), 'utf-8')
+      return { success: true }
+    } catch (err) {
+      reply.code(400)
+      return { error: 'Failed to save notes' }
+    }
+  })
+
   // Serve static frontend in production
   const webDistPath = path.resolve(__dirname, '../../web/dist')
-  console.log(`  Web dist: ${webDistPath} (exists: ${fs.existsSync(webDistPath)})`)
+  if (!fs.existsSync(webDistPath)) {
+    console.warn(`  [Warning] Frontend not found at ${webDistPath}`)
+    console.warn(`  Run 'pnpm run build:web' to build the frontend, or use dev mode.`)
+  }
   if (fs.existsSync(webDistPath)) {
     await fastify.register(fastifyStatic, {
       root: webDistPath,
@@ -139,6 +248,7 @@ export async function startServer(port: number, projectDir: string) {
   // Graceful shutdown
   const shutdown = async () => {
     console.log('\nShutting down...')
+    recorder.flush()
     agentsWriter.flush(workspaceManager.getPanes())
     fsWatcher.close()
     gitService.close()

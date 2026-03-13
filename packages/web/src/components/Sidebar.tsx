@@ -1,7 +1,10 @@
-import { Plus, Zap, ClipboardList, Settings } from 'lucide-react'
+import { Plus, Zap, ClipboardList, Settings, History, StickyNote } from 'lucide-react'
 
 interface SidebarProps {
   onAddPane: () => void
+  onOpenSettings: () => void
+  onOpenReplay: () => void
+  onOpenNotes: () => void
 }
 
 interface SidebarButtonProps {
@@ -44,7 +47,7 @@ function SidebarButton({ icon, title, onClick, disabled }: SidebarButtonProps) {
   )
 }
 
-export function Sidebar({ onAddPane }: SidebarProps) {
+export function Sidebar({ onAddPane, onOpenSettings, onOpenReplay, onOpenNotes }: SidebarProps) {
   return (
     <div
       style={{
@@ -70,6 +73,16 @@ export function Sidebar({ onAddPane }: SidebarProps) {
         disabled
       />
       <SidebarButton
+        icon={<History className="sidebar-icon" />}
+        title="Replay History"
+        onClick={onOpenReplay}
+      />
+      <SidebarButton
+        icon={<StickyNote className="sidebar-icon" />}
+        title="Notes"
+        onClick={onOpenNotes}
+      />
+      <SidebarButton
         icon={<ClipboardList className="sidebar-icon sidebar-icon--disabled" />}
         title="Templates (coming soon)"
         disabled
@@ -79,9 +92,9 @@ export function Sidebar({ onAddPane }: SidebarProps) {
 
       <div style={{ marginBottom: 'var(--space-lg)' }}>
         <SidebarButton
-          icon={<Settings className="sidebar-icon sidebar-icon--disabled" />}
-          title="Settings (coming soon)"
-          disabled
+          icon={<Settings className="sidebar-icon" />}
+          title="Settings (⌘,)"
+          onClick={onOpenSettings}
         />
       </div>
     </div>

@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from 'react'
 import { Sidebar } from './Sidebar'
 import { AgentPane } from './AgentPane'
 import { AddPaneDialog } from './AddPaneDialog'
+import { SettingsDialog } from './SettingsDialog'
+import { NotesDialog } from './NotesDialog'
 import { CommandPalette } from './CommandPalette'
 import { ResizeHandle } from './ResizeHandle'
 import { FileTree } from './FileTree'
@@ -47,19 +49,27 @@ export function Layout({ send }: LayoutProps) {
   const { panes, activePaneId, setActivePaneId, name, connectionStatus } = useWorkspaceStore()
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const [widths, setWidths] = useState<PanelWidths>(loadWidths)
   const widthsRef = useRef(widths)
   widthsRef.current = widths
 
   const handleTogglePane = useCallback(
     (paneId: string) => {
-      setActivePaneId(activePaneId === paneId ? null : paneId)
+      const current = useWorkspaceStore.getState().activePaneId
+      setActivePaneId(current === paneId ? null : paneId)
     },
-    [activePaneId, setActivePaneId],
+    [setActivePaneId],
   )
 
   const handleOpenAddPane = useCallback(() => setShowAddDialog(true), [])
   const handleToggleCommandPalette = useCallback(() => setShowCommandPalette(v => !v), [])
+  const handleOpenSettings = useCallback(() => setShowSettings(true), [])
+  const handleOpenNotes = useCallback(() => setShowNotes(true), [])
+  const handleOpenReplay = useCallback(() => {
+    useWorkspaceStore.getState().openReplayTab()
+  }, [])
 
   const handleSaveWidths = useCallback(() => {
     saveWidths(widthsRef.current)
@@ -77,6 +87,7 @@ export function Layout({ send }: LayoutProps) {
     send,
     onToggleCommandPalette: handleToggleCommandPalette,
     onAddPane: handleOpenAddPane,
+    onOpenSettings: handleOpenSettings,
   })
 
   return (
@@ -90,7 +101,7 @@ export function Layout({ send }: LayoutProps) {
     >
       {/* Column 1: Sidebar */}
       <div style={{ width: 'var(--sidebar-width)', flexShrink: 0 }}>
-        <Sidebar onAddPane={handleOpenAddPane} />
+        <Sidebar onAddPane={handleOpenAddPane} onOpenSettings={handleOpenSettings} onOpenReplay={handleOpenReplay} onOpenNotes={handleOpenNotes} />
       </div>
 
       {/* Column 2: Agent Panes */}
@@ -250,6 +261,18 @@ export function Layout({ send }: LayoutProps) {
         isOpen={showAddDialog}
         onClose={() => setShowAddDialog(false)}
         send={send}
+      />
+
+      {/* Settings Dialog */}
+      <SettingsDialog
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
+
+      {/* Notes Dialog */}
+      <NotesDialog
+        isOpen={showNotes}
+        onClose={() => setShowNotes(false)}
       />
 
       {/* Command Palette */}

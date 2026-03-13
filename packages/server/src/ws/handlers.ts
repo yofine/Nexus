@@ -21,11 +21,20 @@ export function setupWsHandlers(
     state,
   })
 
-  // Replay terminal scrollback for each pane
+  // Replay terminal scrollback for each pane — chunk large scrollbacks
+  // to avoid blocking the event loop with a single huge JSON.stringify
+  const SCROLLBACK_CHUNK_SIZE = 64 * 1024 // 64KB per message
   for (const pane of state.panes) {
     const scrollback = workspaceManager.getScrollback(pane.id)
     if (scrollback) {
-      send({ type: 'terminal.output', paneId: pane.id, data: scrollback })
+      if (scrollback.length <= SCROLLBACK_CHUNK_SIZE) {
+        send({ type: 'terminal.output', paneId: pane.id, data: scrollback })
+      } else {
+        // Send in chunks to avoid blocking
+        for (let i = 0; i < scrollback.length; i += SCROLLBACK_CHUNK_SIZE) {
+          send({ type: 'terminal.output', paneId: pane.id, data: scrollback.slice(i, i + SCROLLBACK_CHUNK_SIZE) })
+        }
+      }
     }
   }
 
@@ -107,7 +116,11 @@ export function setupWsHandlers(
         break
 
       case 'pane.restart':
-        workspaceManager.restartPane(event.paneId, event.mode)
+        workspaceManager.restartPane(event.paneId, event.mode, event.sessionId)
+        break
+
+      case 'session.list':
+        send({ type: 'session.list', paneId: event.paneId, sessions: workspaceManager.getSessionList(event.paneId) })
         break
 
       case 'git.refresh':
@@ -190,9 +203,24 @@ export function setupWsHandlers(
       case 'workspace.save':
         break
 
+      case 'review.comment': {
+        // Send review comment to agent pane as terminal input
+        const { paneId: targetPaneId, comment } = event
+        const targetPane = workspaceManager.getPanes().find((p) => p.id === targetPaneId)
+        if (targetPane && comment.content.trim()) {
+          const msg = [
+            '',
+            `[Review Comment] ${comment.file}:${comment.line}`,
+            comment.content.trim(),
+            '',
+          ].join('\n')
+          workspaceManager.writeToPane(targetPaneId, msg + '\n')
+        }
+        break
+      }
+
       case 'broadcast.send':
       case 'task.dispatch':
-      case 'review.comment':
         // P2 features — no-op for now
         break
     }

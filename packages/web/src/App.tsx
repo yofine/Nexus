@@ -14,8 +14,7 @@ export function App() {
     updatePaneMeta,
     setConnectionStatus,
     setFileTree,
-    setGitDiffs,
-    setGitStagedDiffs,
+    setGitAllDiffs,
     setGitBranchInfo,
     setPaneDiffs,
     addActivity,
@@ -60,8 +59,7 @@ export function App() {
           break
 
         case 'git.diff':
-          setGitDiffs(event.unstaged)
-          setGitStagedDiffs(event.staged || [])
+          setGitAllDiffs(event.unstaged, event.staged || [])
           break
 
         case 'git.branchInfo':
@@ -88,7 +86,7 @@ export function App() {
           break
       }
     },
-    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitDiffs, setGitStagedDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity],
+    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitAllDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity],
   )
 
   const { send, status } = useWebSocket({ onMessage: handleMessage })

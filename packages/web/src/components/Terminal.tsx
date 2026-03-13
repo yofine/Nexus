@@ -21,6 +21,7 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
   const fitRef = useRef<FitAddon | null>(null)
   const onDataRef = useRef(onData)
   const onResizeRef = useRef(onResize)
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Keep refs up to date without re-running the effect
   onDataRef.current = onData
@@ -63,30 +64,39 @@ export function Terminal({ paneId, onData, onResize }: TerminalProps) {
       onDataRef.current(data)
     })
 
-    // Register write function for incoming terminal output
-    registerTerminalWriter(paneId, (data: string) => {
-      term.write(data)
-    })
+    // Register write function + xterm + fitAddon for external control
+    registerTerminalWriter(
+      paneId,
+      (data: string) => { term.write(data) },
+      term,
+      fitAddon,
+    )
 
     termRef.current = term
     fitRef.current = fitAddon
 
-    // Resize observer
+    // Resize observer — debounced to avoid excessive resize events during drag
     const resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current)
+      }
+      resizeTimerRef.current = setTimeout(() => {
         if (fitRef.current && containerRef.current && containerRef.current.clientHeight > 0) {
           fitRef.current.fit()
           if (termRef.current) {
             onResizeRef.current(termRef.current.cols, termRef.current.rows)
           }
         }
-      })
+      }, 50)
     })
 
     resizeObserver.observe(containerRef.current)
 
     return () => {
       resizeObserver.disconnect()
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current)
+      }
       unregisterTerminalWriter(paneId)
       term.dispose()
       termRef.current = null

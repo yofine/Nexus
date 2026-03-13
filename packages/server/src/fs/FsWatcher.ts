@@ -50,7 +50,10 @@ export class FsWatcher {
     const scheduleRebuild = () => {
       if (this.debounceTimer) clearTimeout(this.debounceTimer)
       this.debounceTimer = setTimeout(() => {
-        this.tree = this.buildTree(this.projectDir, 0)
+        const newTree = this.buildTree(this.projectDir, 0)
+        // Skip broadcast if tree hasn't structurally changed
+        if (this.treeFingerprint(newTree) === this.treeFingerprint(this.tree)) return
+        this.tree = newTree
         this.notifyListeners()
       }, 300)
     }
@@ -120,6 +123,19 @@ export class FsWatcher {
     for (const listener of this.listeners) {
       listener(this.tree)
     }
+  }
+
+  private treeFingerprint(tree: FileNode[]): string {
+    // Fast structural fingerprint: concatenate paths and types
+    const parts: string[] = []
+    const walk = (nodes: FileNode[]) => {
+      for (const n of nodes) {
+        parts.push(n.path)
+        if (n.children) walk(n.children)
+      }
+    }
+    walk(tree)
+    return parts.join('\n')
   }
 
   private buildTree(dirPath: string, depth: number): FileNode[] {

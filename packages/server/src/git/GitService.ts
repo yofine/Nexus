@@ -14,6 +14,7 @@ export class GitService {
   private gitWatcher: FSWatcher | null = null
   private workWatcher: FSWatcher | null = null
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
+  private workDebounceTimer: ReturnType<typeof setTimeout> | null = null
   private listeners = new Set<(result: GitDiffResult) => void>()
   private currentResult: GitDiffResult = { unstaged: [], staged: [] }
 
@@ -46,6 +47,15 @@ export class GitService {
     })
     this.gitWatcher.on('all', scheduleRefresh)
 
+    // Working tree watcher — uses a longer debounce to avoid flooding
+    // git diff on every keystroke when agents are writing files
+    const scheduleWorkRefresh = () => {
+      if (this.workDebounceTimer) clearTimeout(this.workDebounceTimer)
+      this.workDebounceTimer = setTimeout(() => {
+        this.refresh()
+      }, 3000)
+    }
+
     this.workWatcher = watch(this.projectDir, {
       ignored: (filePath: string) => {
         const basename = path.basename(filePath)
@@ -55,7 +65,7 @@ export class GitService {
       ignoreInitial: true,
       depth: 5,
     })
-    this.workWatcher.on('all', scheduleRefresh)
+    this.workWatcher.on('all', scheduleWorkRefresh)
   }
 
   async refresh(): Promise<void> {
@@ -157,6 +167,7 @@ export class GitService {
 
   close(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer)
+    if (this.workDebounceTimer) clearTimeout(this.workDebounceTimer)
     this.gitWatcher?.close()
     this.gitWatcher = null
     this.workWatcher?.close()

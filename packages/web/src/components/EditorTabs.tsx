@@ -1,9 +1,10 @@
-import { X, File, GitBranch, Shield, Activity } from 'lucide-react'
+import { X, File, GitBranch, Shield, Activity, History } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { EditorTab } from '@/stores/workspaceStore'
 import { FileViewer } from './FileViewer'
 import { GitDiffPanel } from './GitDiffPanel'
 import { ActivityMap } from './ActivityMap'
+import { ReplayViewer } from './ReplayViewer'
 import type { ClientEvent } from '@/types'
 
 interface EditorTabsProps {
@@ -20,7 +21,9 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
     ? Activity
     : tab.type === 'review'
       ? (tab.paneId ? GitBranch : Shield)
-      : File
+      : tab.type === 'replay'
+        ? History
+        : File
 
   return (
     <div
@@ -113,6 +116,9 @@ export function EditorTabs({ send }: EditorTabsProps) {
         )}
         {activeTab?.type === 'review' && (
           <GitDiffPanel send={send} paneId={activeTab.paneId} />
+        )}
+        {activeTab?.type === 'replay' && (
+          <ReplayViewer sessionId={activeTab.sessionId} />
         )}
         {activeTab?.type === 'file' && activeTab.filePath && (
           <FileViewer filePath={activeTab.filePath} />

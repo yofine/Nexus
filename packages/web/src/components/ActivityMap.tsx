@@ -2,8 +2,9 @@ import { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ActivityEntry } from '@/stores/workspaceStore'
 import { getAgentColor } from './AgentIcon'
-import { Eye, Pencil, FilePlus, FileX, FileCode2 } from 'lucide-react'
-import type { FileAction } from '@/types'
+import { DependencyTopology, VIEW_MODE_META, type ViewMode } from './DependencyTopology'
+import { Eye, Pencil, FilePlus, FileX, FileCode2, Filter, GitFork, FolderTree, Flame, Users, Clock } from 'lucide-react'
+import type { FileAction, DepGraph } from '@/types'
 
 // ── Helpers ──
 
@@ -38,130 +39,6 @@ function relativeTime(ts: number): string {
   return `${Math.floor(diff / 3600)}h ago`
 }
 
-function groupByDirectory(files: string[]): Map<string, string[]> {
-  const dirs = new Map<string, string[]>()
-  for (const file of files) {
-    const parts = file.split('/')
-    const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '.'
-    if (!dirs.has(dir)) dirs.set(dir, [])
-    dirs.get(dir)!.push(file)
-  }
-  return dirs
-}
-
-// ── File Node ──
-
-interface FileNodeProps {
-  file: string
-  agents: Array<{ paneId: string; paneName: string; agent: string; action: FileAction }>
-  isNew: boolean
-  onClickFile: (file: string) => void
-}
-
-function FileNode({ file, agents, isNew, onClickFile }: FileNodeProps) {
-  const fileName = file.split('/').pop() || file
-
-  return (
-    <div
-      className={isNew ? 'activity-file-node--new' : undefined}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '3px 8px',
-        borderRadius: 'var(--radius-sm)',
-        cursor: 'pointer',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-      onClick={() => onClickFile(file)}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-overlay)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-    >
-      {/* Agent cursors */}
-      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-        {agents.map((a) => (
-          <div
-            key={a.paneId}
-            className="agent-cursor-dot"
-            style={{
-              '--cursor-color': getAgentColor(a.agent),
-            } as React.CSSProperties}
-            title={`${a.paneName}: ${a.action}`}
-          >
-            <span style={{ color: getActionColor(a.action), display: 'flex' }}>
-              {getActionIcon(a.action, 10)}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* File name */}
-      <span
-        style={{
-          fontSize: 'var(--font-sm)',
-          fontFamily: 'var(--font-mono)',
-          color: 'var(--text-primary)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {fileName}
-      </span>
-
-      {/* Glow highlight when actively being worked on */}
-      {agents.length > 0 && (
-        <div
-          className="file-active-glow"
-          style={{
-            '--glow-color': getAgentColor(agents[0].agent),
-          } as React.CSSProperties}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Directory Group ──
-
-interface DirGroupProps {
-  dir: string
-  files: string[]
-  activeFileAgents: Map<string, Array<{ paneId: string; paneName: string; agent: string; action: FileAction }>>
-  newFiles: Set<string>
-  onClickFile: (file: string) => void
-}
-
-function DirGroup({ dir, files, activeFileAgents, newFiles, onClickFile }: DirGroupProps) {
-  return (
-    <div style={{ marginBottom: 4 }}>
-      <div
-        style={{
-          fontSize: 'var(--font-xs)',
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)',
-          padding: '2px 8px',
-          userSelect: 'none',
-        }}
-      >
-        {dir === '.' ? '/' : dir + '/'}
-      </div>
-      <div style={{ paddingLeft: 8 }}>
-        {files.map((file) => (
-          <FileNode
-            key={file}
-            file={file}
-            agents={activeFileAgents.get(file) || []}
-            isNew={newFiles.has(file)}
-            onClickFile={onClickFile}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ── Timeline Entry ──
 
 function TimelineEntry({ entry, isNew }: { entry: ActivityEntry; isNew: boolean }) {
@@ -185,20 +62,13 @@ function TimelineEntry({ entry, isNew }: { entry: ActivityEntry; isNew: boolean 
         minHeight: 24,
       }}
     >
-      {/* Agent color bar */}
       <div style={{ width: 3, height: 16, borderRadius: 2, background: color, flexShrink: 0 }} />
-
-      {/* Agent name */}
-      <span style={{ color, fontWeight: 600, width: 72, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ color, fontWeight: 600, minWidth: 100, maxWidth: 140, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {entry.paneName}
       </span>
-
-      {/* Action icon */}
       <span style={{ color: getActionColor(entry.action), display: 'flex', flexShrink: 0 }}>
         {getActionIcon(entry.action, 12)}
       </span>
-
-      {/* File path */}
       <span
         style={{
           fontFamily: 'var(--font-mono)',
@@ -211,8 +81,6 @@ function TimelineEntry({ entry, isNew }: { entry: ActivityEntry; isNew: boolean 
       >
         {entry.file}
       </span>
-
-      {/* Time */}
       <span style={{ color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {timeStr}
       </span>
@@ -220,120 +88,150 @@ function TimelineEntry({ entry, isNew }: { entry: ActivityEntry; isNew: boolean 
   )
 }
 
+// ── View Mode Icons ──
+
+const VIEW_ICONS: Record<ViewMode, typeof GitFork> = {
+  dependency: GitFork,
+  directory:  FolderTree,
+  heatmap:    Flame,
+  agent:      Users,
+  temporal:   Clock,
+}
+
 // ── Main Component ──
 
 export function ActivityMap() {
-  const { activities, paneCurrentFile, panes, openFileTab } = useWorkspaceStore()
-  const [newFileIds, setNewFileIds] = useState<Set<string>>(new Set())
+  const { activities, paneCurrentFile, panes, openFileTab, depGraph, setDepGraph } = useWorkspaceStore()
   const [newEntryIds, setNewEntryIds] = useState<Set<string>>(new Set())
   const prevActivityCountRef = useRef(0)
+  const [loading, setLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('dependency')
+  const [filterPaneId, setFilterPaneId] = useState<string | null>(null)
+
+  // Fetch dependency graph on mount
+  useEffect(() => {
+    if (!depGraph) {
+      fetchDepGraph()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchDepGraph = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/deps')
+      if (res.ok) {
+        const graph: DepGraph = await res.json()
+        setDepGraph(graph)
+      }
+    } catch (err) {
+      console.error('Failed to fetch dependency graph:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [setDepGraph])
 
   // Track new entries for animation
   useEffect(() => {
     if (activities.length > prevActivityCountRef.current) {
       const newIds = new Set<string>()
-      const newFIds = new Set<string>()
       const newCount = activities.length - prevActivityCountRef.current
       for (let i = 0; i < Math.min(newCount, 5); i++) {
         newIds.add(activities[i].id)
-        newFIds.add(activities[i].file)
       }
       setNewEntryIds(newIds)
-      setNewFileIds(newFIds)
-      // Clear animation flags after animation completes
-      const timer = setTimeout(() => {
-        setNewEntryIds(new Set())
-        setNewFileIds(new Set())
-      }, 800)
+      const timer = setTimeout(() => setNewEntryIds(new Set()), 800)
       prevActivityCountRef.current = activities.length
       return () => clearTimeout(timer)
     }
     prevActivityCountRef.current = activities.length
   }, [activities])
 
-  // Build active file map from paneCurrentFile
-  const activeFileAgents = useMemo(() => {
-    const map = new Map<string, Array<{ paneId: string; paneName: string; agent: string; action: FileAction }>>()
-    for (const [paneId, current] of Object.entries(paneCurrentFile)) {
-      const pane = panes.find((p) => p.id === paneId)
-      if (!pane) continue
-      if (!map.has(current.file)) map.set(current.file, [])
-      map.get(current.file)!.push({
-        paneId,
-        paneName: pane.name,
-        agent: pane.agent,
-        action: current.action,
-      })
-    }
-    return map
-  }, [paneCurrentFile, panes])
+  const filteredActivities = useMemo(() => {
+    if (!filterPaneId) return activities
+    return activities.filter((a) => a.paneId === filterPaneId)
+  }, [activities, filterPaneId])
 
-  // Build touched files list from recent activities (last 30 unique files)
-  const touchedFiles = useMemo(() => {
-    const seen = new Set<string>()
-    const files: string[] = []
-    for (const act of activities) {
-      if (!seen.has(act.file)) {
-        seen.add(act.file)
-        files.push(act.file)
-        if (files.length >= 30) break
+  // Get unique panes that have activity
+  const activePaneList = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; agent: string }>()
+    for (const a of activities) {
+      if (!seen.has(a.paneId)) {
+        seen.set(a.paneId, { id: a.paneId, name: a.paneName, agent: a.agent })
       }
     }
-    return files
+    return Array.from(seen.values())
   }, [activities])
-
-  // Group by directory
-  const dirGroups = useMemo(() => groupByDirectory(touchedFiles), [touchedFiles])
 
   const handleClickFile = useCallback((file: string) => {
     openFileTab(file)
   }, [openFileTab])
 
-  // Empty state
-  if (activities.length === 0) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          gap: 16,
-          color: 'var(--text-muted)',
-        }}
-      >
-        <div className="activity-empty-orbit">
-          <div className="orbit-ring" />
-          <div className="orbit-dot orbit-dot--1" />
-          <div className="orbit-dot orbit-dot--2" />
-          <div className="orbit-dot orbit-dot--3" />
-        </div>
-        <span style={{ fontSize: 'var(--font-lg)' }}>Waiting for agent activity...</span>
-        <span style={{ fontSize: 'var(--font-xs)' }}>File operations will appear here in real-time</span>
-      </div>
-    )
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Top: Active file map */}
+      {/* Row 1: View mode tabs */}
       <div
         style={{
-          flex: 1,
-          overflow: 'auto',
-          minHeight: 0,
-          padding: '8px 4px',
+          flexShrink: 0,
           borderBottom: '1px solid var(--border-subtle)',
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          minHeight: 32,
         }}
       >
-        {/* Active agents summary bar */}
         <div
           style={{
             display: 'flex',
-            gap: 12,
-            padding: '4px 12px 8px',
+            gap: 1,
+            background: 'var(--bg-primary)',
+            borderRadius: 'var(--radius-md)',
+            padding: 2,
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          {(Object.keys(VIEW_MODE_META) as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              title={VIEW_MODE_META[mode].desc}
+              style={{
+                background: viewMode === mode
+                  ? 'var(--bg-elevated)'
+                  : 'transparent',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                padding: '2px 8px',
+                fontSize: 'var(--font-xs)',
+                color: viewMode === mode ? 'var(--text-primary)' : 'var(--text-muted)',
+                fontWeight: viewMode === mode ? 600 : 400,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {(() => { const ModeIcon = VIEW_ICONS[mode]; return <ModeIcon width={10} height={10} /> })()}
+              <span>{VIEW_MODE_META[mode].label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Row 2: Active agents */}
+      {panes.some((p) => paneCurrentFile[p.id]) && (
+        <div
+          style={{
+            flexShrink: 0,
+            borderBottom: '1px solid var(--border-subtle)',
+            padding: '4px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
             flexWrap: 'wrap',
+            minHeight: 28,
           }}
         >
           {panes.filter((p) => paneCurrentFile[p.id]).map((pane) => {
@@ -355,9 +253,7 @@ export function ActivityMap() {
               >
                 <div
                   className="agent-cursor-breathing"
-                  style={{
-                    '--cursor-color': color,
-                  } as React.CSSProperties}
+                  style={{ '--cursor-color': color } as React.CSSProperties}
                 />
                 <span style={{ color, fontWeight: 600 }}>{pane.name}</span>
                 <span style={{ color: 'var(--text-muted)' }}>→</span>
@@ -368,20 +264,51 @@ export function ActivityMap() {
             )
           })}
         </div>
+      )}
 
-        {/* File tree map */}
-        <div>
-          {Array.from(dirGroups.entries()).map(([dir, files]) => (
-            <DirGroup
-              key={dir}
-              dir={dir}
-              files={files}
-              activeFileAgents={activeFileAgents}
-              newFiles={newFileIds}
-              onClickFile={handleClickFile}
-            />
-          ))}
-        </div>
+      {/* Center: Topology graph */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {loading && !depGraph ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: 'var(--text-muted)',
+              fontSize: 'var(--font-sm)',
+            }}
+          >
+            Analyzing dependencies...
+          </div>
+        ) : depGraph ? (
+          <DependencyTopology
+            graph={depGraph}
+            viewMode={viewMode}
+            onClickFile={handleClickFile}
+          />
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              gap: 16,
+              color: 'var(--text-muted)',
+            }}
+          >
+            <div className="activity-empty-orbit">
+              <div className="orbit-ring" />
+              <div className="orbit-dot orbit-dot--1" />
+              <div className="orbit-dot orbit-dot--2" />
+              <div className="orbit-dot orbit-dot--3" />
+            </div>
+            <span style={{ fontSize: 'var(--font-lg)' }}>Waiting for agent activity...</span>
+            <span style={{ fontSize: 'var(--font-xs)' }}>File operations will appear here in real-time</span>
+          </div>
+        )}
       </div>
 
       {/* Bottom: Timeline */}
@@ -391,6 +318,7 @@ export function ActivityMap() {
           maxHeight: 200,
           overflow: 'auto',
           background: 'var(--bg-surface)',
+          borderTop: '1px solid var(--border-subtle)',
         }}
       >
         <div
@@ -399,20 +327,76 @@ export function ActivityMap() {
             fontSize: 'var(--font-xs)',
             color: 'var(--text-muted)',
             fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             userSelect: 'none',
           }}
         >
-          Timeline
+          <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timeline</span>
+
+          {/* Agent filter chips */}
+          {activePaneList.length > 1 && (
+            <>
+              <div style={{ width: 1, height: 12, background: 'var(--border-subtle)' }} />
+              <Filter width={10} height={10} style={{ opacity: 0.5 }} />
+              <button
+                onClick={() => setFilterPaneId(null)}
+                style={{
+                  background: !filterPaneId ? 'var(--bg-elevated)' : 'none',
+                  border: !filterPaneId ? '1px solid var(--border-default)' : '1px solid transparent',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '1px 6px',
+                  fontSize: 'var(--font-xs)',
+                  color: !filterPaneId ? 'var(--text-primary)' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontWeight: !filterPaneId ? 600 : 400,
+                }}
+              >
+                All
+              </button>
+              {activePaneList.map((p) => {
+                const color = getAgentColor(p.agent)
+                const isActive = filterPaneId === p.id
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setFilterPaneId(isActive ? null : p.id)}
+                    style={{
+                      background: isActive ? `color-mix(in srgb, ${color} 15%, transparent)` : 'none',
+                      border: isActive ? `1px solid color-mix(in srgb, ${color} 30%, transparent)` : '1px solid transparent',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '1px 6px',
+                      fontSize: 'var(--font-xs)',
+                      color: isActive ? color : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontWeight: isActive ? 600 : 400,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 3,
+                    }}
+                  >
+                    <div style={{ width: 4, height: 4, borderRadius: '50%', background: color }} />
+                    {p.name}
+                  </button>
+                )
+              })}
+            </>
+          )}
         </div>
-        {activities.slice(0, 30).map((entry) => (
-          <TimelineEntry
-            key={entry.id}
-            entry={entry}
-            isNew={newEntryIds.has(entry.id)}
-          />
-        ))}
+        {filteredActivities.length === 0 ? (
+          <div style={{ padding: '8px 12px', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
+            {filterPaneId ? 'No activity for this agent' : 'No activity yet'}
+          </div>
+        ) : (
+          filteredActivities.slice(0, 30).map((entry) => (
+            <TimelineEntry
+              key={entry.id}
+              entry={entry}
+              isNew={newEntryIds.has(entry.id)}
+            />
+          ))
+        )}
       </div>
     </div>
   )
