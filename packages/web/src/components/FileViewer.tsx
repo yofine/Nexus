@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, type ComponentPropsWithoutRef } from 'react'
 import { createHighlighter, type Highlighter } from 'shiki'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { MermaidRenderer } from './MermaidRenderer'
 
 interface FileViewerProps {
   filePath: string
@@ -28,6 +29,15 @@ function isMarkdown(filePath: string): boolean {
   return ext === 'md' || ext === 'mdx'
 }
 
+function isSvg(filePath: string): boolean {
+  return filePath.split('.').pop()?.toLowerCase() === 'svg'
+}
+
+function isMermaid(filePath: string): boolean {
+  const ext = filePath.split('.').pop()?.toLowerCase() || ''
+  return ext === 'mmd' || ext === 'mermaid'
+}
+
 function getLang(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || ''
   const map: Record<string, string> = {
@@ -52,6 +62,9 @@ export function FileViewer({ filePath }: FileViewerProps) {
   const [viewRaw, setViewRaw] = useState(false)
   const codeRef = useRef<HTMLDivElement>(null)
   const isMd = useMemo(() => isMarkdown(filePath), [filePath])
+  const isSvgFile = useMemo(() => isSvg(filePath), [filePath])
+  const isMermaidFile = useMemo(() => isMermaid(filePath), [filePath])
+  const hasPreview = isMd || isSvgFile || isMermaidFile
 
   useEffect(() => {
     setLoading(true)
@@ -66,8 +79,8 @@ export function FileViewer({ filePath }: FileViewerProps) {
       })
       .then((data: { content: string }) => {
         setContent(data.content)
-        // Skip highlighting for markdown in preview mode
-        if (isMd) return
+        // Skip highlighting for markdown/svg in preview mode (will highlight on raw toggle)
+        if (hasPreview) return
         // Highlight asynchronously
         const lang = getLang(filePath)
         if (lang) {
@@ -77,9 +90,7 @@ export function FileViewer({ filePath }: FileViewerProps) {
               theme: 'github-dark',
             })
             setHighlightedHtml(html)
-          }).catch(() => {
-            // fallback to plain text
-          })
+          }).catch(() => {/* fallback to plain text */})
         }
       })
       .catch((err: Error) => {
@@ -88,7 +99,18 @@ export function FileViewer({ filePath }: FileViewerProps) {
       .finally(() => {
         setLoading(false)
       })
-  }, [filePath, isMd])
+  }, [filePath, hasPreview])
+
+  // Highlight on demand when switching to raw view for preview-type files
+  useEffect(() => {
+    if (!viewRaw || !content || highlightedHtml) return
+    const lang = getLang(filePath)
+    if (lang) {
+      getHighlighter().then((hl) => {
+        setHighlightedHtml(hl.codeToHtml(content, { lang, theme: 'github-dark' }))
+      }).catch(() => {/* fallback to plain text */})
+    }
+  }, [viewRaw, content, filePath, highlightedHtml])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -112,7 +134,7 @@ export function FileViewer({ filePath }: FileViewerProps) {
         title={filePath}
       >
         <span>{filePath}</span>
-        {isMd && (
+        {hasPreview && (
           <button
             onClick={() => setViewRaw((v) => !v)}
             style={{
@@ -148,11 +170,48 @@ export function FileViewer({ filePath }: FileViewerProps) {
 
         {content !== null && !loading && isMd && !viewRaw && (
           <div className="markdown-body" style={{ padding: '16px 24px' }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({ className, children, ...props }: ComponentPropsWithoutRef<'code'>) {
+                  const match = /language-(\w+)/.exec(className || '')
+                  if (match?.[1] === 'mermaid') {
+                    return <MermaidRenderer chart={String(children)} />
+                  }
+                  return <code className={className} {...props}>{children}</code>
+                },
+              }}
+            >
+              {content}
+            </ReactMarkdown>
           </div>
         )}
 
-        {content !== null && !loading && (!isMd || viewRaw) && (
+        {content !== null && !loading && isMermaidFile && !viewRaw && (
+          <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
+            <MermaidRenderer chart={content} />
+          </div>
+        )}
+
+        {content !== null && !loading && isSvgFile && !viewRaw && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              padding: 24,
+              background: 'repeating-conic-gradient(var(--bg-surface) 0% 25%, transparent 0% 50%) 50% / 16px 16px',
+            }}
+          >
+            <div
+              dangerouslySetInnerHTML={{ __html: content }}
+              style={{ maxWidth: '100%', maxHeight: '100%' }}
+            />
+          </div>
+        )}
+
+        {content !== null && !loading && (!hasPreview || viewRaw) && (
           highlightedHtml && !viewRaw ? (
             <div
               ref={codeRef}
