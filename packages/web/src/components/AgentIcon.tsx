@@ -133,3 +133,29 @@ export function getAgentColor(agent: string): string {
   }
   return map[agent.toLowerCase()] || 'var(--accent-primary)'
 }
+
+// Per-pane instance colors — visually distinct palette for differentiating agents
+const PANE_COLORS = [
+  '#7C6AF7', // purple
+  '#3B82F6', // blue
+  '#10B981', // emerald
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#EC4899', // pink
+  '#06B6D4', // cyan
+  '#F97316', // orange
+  '#8B5CF6', // violet
+  '#14B8A6', // teal
+  '#84CC16', // lime
+  '#E879F9', // fuchsia
+]
+
+export function getPaneColor(index: number): string {
+  return PANE_COLORS[index % PANE_COLORS.length]
+}
+
+// Get pane color by paneId, looking up index in panes array
+export function getPaneColorById(paneId: string, panes: Array<{ id: string }>): string {
+  const index = panes.findIndex((p) => p.id === paneId)
+  return getPaneColor(index >= 0 ? index : 0)
+}

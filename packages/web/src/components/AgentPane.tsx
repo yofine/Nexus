@@ -8,7 +8,7 @@ import {
   Play,
 } from 'lucide-react'
 import { Terminal } from './Terminal'
-import { AgentIcon, getAgentDisplayName, getAgentColor } from './AgentIcon'
+import { getAgentDisplayName, getPaneColor } from './AgentIcon'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import {
   pauseTerminal,
@@ -21,6 +21,7 @@ import type { PaneState, ClientEvent } from '@/types'
 
 interface AgentPaneProps {
   pane: PaneState
+  paneIndex: number
   isExpanded: boolean
   onToggle: () => void
   send: (event: ClientEvent) => void
@@ -34,7 +35,8 @@ const statusColors: Record<string, string> = {
   error: 'var(--status-error)',
 }
 
-export const AgentPane = memo(function AgentPane({ pane, isExpanded, onToggle, send }: AgentPaneProps) {
+export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, onToggle, send }: AgentPaneProps) {
+  const paneColor = getPaneColor(paneIndex)
   const paneDiffs = useWorkspaceStore((s) => s.paneDiffs[pane.id])
   const { openReviewTab } = useWorkspaceStore()
   const diffCount = paneDiffs?.length ?? 0
@@ -142,17 +144,15 @@ export const AgentPane = memo(function AgentPane({ pane, isExpanded, onToggle, s
             <ChevronRight className="icon-sm" style={{ color: 'var(--text-secondary)' }} />
           )}
 
-          {/* Status dot */}
+          {/* Pane color dot */}
           <div style={{
             width: 'var(--space-md)',
             height: 'var(--space-md)',
             borderRadius: '50%',
-            background: statusColors[pane.status] || 'var(--status-idle)',
+            background: paneColor,
             flexShrink: 0,
+            boxShadow: `0 0 4px ${paneColor}66`,
           }} />
-
-          {/* Agent icon + name */}
-          <AgentIcon agent={pane.agent} size="var(--icon-md)" />
 
           <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 'var(--font-md)', whiteSpace: 'nowrap' }}>
             {pane.name}
@@ -161,10 +161,7 @@ export const AgentPane = memo(function AgentPane({ pane, isExpanded, onToggle, s
           <span
             style={{
               fontSize: 'var(--font-xs)',
-              color: getAgentColor(pane.agent),
-              background: `${getAgentColor(pane.agent)}1a`,
-              padding: '2px var(--space-sm)',
-              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-muted)',
               fontFamily: 'var(--font-mono)',
               whiteSpace: 'nowrap',
               flexShrink: 0,

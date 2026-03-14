@@ -113,6 +113,7 @@ export interface PaneCreateConfig {
   restore: RestoreMode
   isolation?: IsolationMode
   yolo?: boolean
+  sessionId?: string
   cols?: number
   rows?: number
 }

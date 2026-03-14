@@ -13,6 +13,7 @@ import { GitService } from './git/GitService.ts'
 import { setupWsHandlers } from './ws/handlers.ts'
 import { DependencyAnalyzer } from './deps/DependencyAnalyzer.ts'
 import { SessionRecorder } from './history/SessionRecorder.ts'
+import { SessionDiscovery } from './workspace/SessionDiscovery.ts'
 import type { GlobalConfig } from './types.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -137,6 +138,32 @@ export async function startServer(port: number, projectDir: string) {
     }
   })
 
+  // Session discovery (claude sessions list)
+  const sessionDiscovery = new SessionDiscovery(configManager)
+
+  fastify.get('/api/sessions', async (request) => {
+    const { agent } = request.query as { agent?: string }
+    const external = await sessionDiscovery.listSessions(agent || 'claudecode')
+    // Merge with Nexus internal sessions, dedup by sessionId
+    const internal = workspaceManager.getSessionList()
+    const seen = new Set(internal.map((s) => s.sessionId))
+    const merged = [
+      ...internal.map((s) => ({
+        sessionId: s.sessionId,
+        summary: s.paneName,
+        model: s.model,
+        costUsd: s.costUsd,
+        numTurns: undefined as number | undefined,
+        createdAt: s.timestamp,
+        updatedAt: s.timestamp,
+        projectPath: undefined as string | undefined,
+        source: 'nexus' as const,
+      })),
+      ...external.filter((s) => !seen.has(s.sessionId)),
+    ]
+    return merged
+  })
+
   // Replay history endpoints
   fastify.get('/api/replay/sessions', async () => {
     return SessionRecorder.listSessions(projectDir)
@@ -200,6 +227,40 @@ export async function startServer(port: number, projectDir: string) {
       reply.code(404)
       return { error: 'File not found' }
     }
+  })
+
+  // Raw file endpoint — serves binary files with correct MIME type
+  fastify.get('/api/file/raw', async (request, reply) => {
+    const { path: filePath } = request.query as { path?: string }
+    if (!filePath) {
+      reply.code(400)
+      return { error: 'Missing path parameter' }
+    }
+    if (filePath.includes('..') || path.isAbsolute(filePath)) {
+      reply.code(403)
+      return { error: 'Invalid path' }
+    }
+    const fullPath = path.resolve(projectDir, filePath)
+    if (!fullPath.startsWith(projectDir)) {
+      reply.code(403)
+      return { error: 'Path traversal not allowed' }
+    }
+    if (!fs.existsSync(fullPath)) {
+      reply.code(404)
+      return { error: 'File not found' }
+    }
+    const ext = path.extname(fullPath).toLowerCase()
+    const mimeMap: Record<string, string> = {
+      '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.ico': 'image/x-icon',
+      '.bmp': 'image/bmp', '.avif': 'image/avif',
+      '.pdf': 'application/pdf',
+      '.svg': 'image/svg+xml',
+    }
+    const mime = mimeMap[ext] || 'application/octet-stream'
+    const stream = fs.createReadStream(fullPath)
+    reply.type(mime)
+    return reply.send(stream)
   })
 
   // Notes CRUD — persisted to .nexus/notes.yaml

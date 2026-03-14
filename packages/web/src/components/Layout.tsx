@@ -192,10 +192,11 @@ export function Layout({ send }: LayoutProps) {
             </div>
           )}
 
-          {panes.map((pane) => (
+          {panes.map((pane, index) => (
             <AgentPane
               key={pane.id}
               pane={pane}
+              paneIndex={index}
               isExpanded={activePaneId === pane.id}
               onToggle={() => handleTogglePane(pane.id)}
               send={send}

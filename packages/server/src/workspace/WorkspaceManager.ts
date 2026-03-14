@@ -129,6 +129,7 @@ export class WorkspaceManager {
       ...rest,
       yolo: rest.yolo || false,
       isolation,
+      sessionId: rest.sessionId,
     }
 
     // Create worktree if requested

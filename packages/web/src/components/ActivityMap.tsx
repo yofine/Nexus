@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ActivityEntry } from '@/stores/workspaceStore'
-import { getAgentColor } from './AgentIcon'
+import { getPaneColorById } from './AgentIcon'
 import { DependencyTopology, VIEW_MODE_META, type ViewMode } from './DependencyTopology'
 import { Eye, Pencil, FilePlus, FileX, FileCode2, Filter, GitFork, FolderTree, Flame, Users, Clock } from 'lucide-react'
 import type { FileAction, DepGraph } from '@/types'
@@ -41,9 +41,8 @@ function relativeTime(ts: number): string {
 
 // ── Timeline Entry ──
 
-function TimelineEntry({ entry, isNew }: { entry: ActivityEntry; isNew: boolean }) {
+function TimelineEntry({ entry, isNew, color }: { entry: ActivityEntry; isNew: boolean; color: string }) {
   const [timeStr, setTimeStr] = useState(() => relativeTime(entry.timestamp))
-  const color = getAgentColor(entry.agent)
 
   useEffect(() => {
     const timer = setInterval(() => setTimeStr(relativeTime(entry.timestamp)), 5000)
@@ -236,7 +235,7 @@ export function ActivityMap() {
         >
           {panes.filter((p) => paneCurrentFile[p.id]).map((pane) => {
             const current = paneCurrentFile[pane.id]
-            const color = getAgentColor(pane.agent)
+            const color = getPaneColorById(pane.id, panes)
             return (
               <div
                 key={pane.id}
@@ -356,7 +355,7 @@ export function ActivityMap() {
                 All
               </button>
               {activePaneList.map((p) => {
-                const color = getAgentColor(p.agent)
+                const color = getPaneColorById(p.id, panes)
                 const isActive = filterPaneId === p.id
                 return (
                   <button
@@ -394,6 +393,7 @@ export function ActivityMap() {
               key={entry.id}
               entry={entry}
               isNew={newEntryIds.has(entry.id)}
+              color={getPaneColorById(entry.paneId, panes)}
             />
           ))
         )}

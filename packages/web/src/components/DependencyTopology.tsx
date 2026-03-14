@@ -19,7 +19,7 @@ import dagre from '@dagrejs/dagre'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ActivityEntry } from '@/stores/workspaceStore'
 import type { DepGraph, FileAction, FileDiff } from '@/types'
-import { getAgentColor } from './AgentIcon'
+import { getPaneColorById } from './AgentIcon'
 
 // ─── View Modes ─────────────────────────────────────────────
 
@@ -32,6 +32,10 @@ export const VIEW_MODE_META: Record<ViewMode, { label: string; desc: string }> =
   agent:      { label: 'Agent',       desc: 'File ownership by agent clusters' },
   temporal:   { label: 'Temporal',    desc: 'Chronological access order' },
 }
+
+// ─── Module-level panes ref for node component color lookups ─
+// Set by buildFlowData before node components render
+let _currentPanes: Array<{ id: string }> = []
 
 // ─── Constants ──────────────────────────────────────────────
 
@@ -602,7 +606,7 @@ function layoutAgent(
     const pane = panes.find((p) => p.id === group.paneId)
     const agentName = pane?.name || group.paneId
     const agentType = pane?.agent || 'workspace'
-    const color = getAgentColor(agentType)
+    const color = getPaneColorById(group.paneId, panes)
 
     const cols = AGENT_FILE_COLS
     const rows = Math.max(1, Math.ceil(group.files.length / cols))
@@ -650,15 +654,16 @@ function layoutAgent(
 function layoutTemporal(
   graph: DepGraph,
   activities: ActivityEntry[],
+  panes: Array<{ id: string }>,
 ): { positions: Map<string, { x: number; y: number }>; edges: Edge[] } {
   // Order files by first-touched time
   const firstTouch = new Map<string, number>()
-  const fileAgent = new Map<string, string>()
+  const filePaneId = new Map<string, string>()
   const sortedActivities = [...activities].sort((a, b) => a.timestamp - b.timestamp)
   for (const a of sortedActivities) {
     if (!firstTouch.has(a.file)) {
       firstTouch.set(a.file, a.timestamp)
-      fileAgent.set(a.file, a.agent)
+      filePaneId.set(a.file, a.paneId)
     }
   }
 
@@ -965,6 +970,7 @@ const nodeTypes: NodeTypes = {
 
 function buildFlowData(ctx: BuildContext, viewMode: ViewMode): { nodes: Node[]; edges: Edge[] } {
   const { graph, activeFileAgents, gitDiffs, gitStagedDiffs, activities, panes } = ctx
+  _currentPanes = panes
   const activeFiles = new Set(activeFileAgents.keys())
   const nodeIds = new Set(graph.nodes.map((n) => n.id))
 

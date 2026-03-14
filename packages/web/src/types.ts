@@ -99,8 +99,21 @@ export interface PaneCreateConfig {
   restore: RestoreMode
   isolation?: IsolationMode
   yolo?: boolean
+  sessionId?: string
   cols?: number
   rows?: number
+}
+
+export interface DiscoveredSession {
+  sessionId: string
+  summary?: string
+  model?: string
+  costUsd?: number
+  numTurns?: number
+  createdAt?: string
+  updatedAt?: string
+  projectPath?: string
+  source: 'nexus' | 'external'
 }
 
 export interface ReviewComment {

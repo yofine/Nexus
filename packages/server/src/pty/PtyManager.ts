@@ -2,7 +2,10 @@ import * as pty from 'node-pty'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { PaneConfig, PaneStatus, PaneMeta, AgentDefinition, FileActivity } from '../types.ts'
-import { StatuslineParser } from './StatuslineParser.ts'
+import { StatuslineParser } from '../comm/StatuslineParser.ts'
+import { ShellReadyDetector } from '../comm/ShellReadyDetector.ts'
+import { AgentReadyDetector } from '../comm/AgentReadyDetector.ts'
+import { OutputStateAnalyzer } from '../comm/OutputStateAnalyzer.ts'
 import { ActivityParser } from './ActivityParser.ts'
 import type { ConfigManager } from '../workspace/ConfigManager.ts'
 
@@ -15,6 +18,9 @@ interface PtyEntry {
   meta: PaneMeta
   parser: StatuslineParser
   activityParser: ActivityParser
+  stateAnalyzer: OutputStateAnalyzer
+  shellDetector: ShellReadyDetector | null
+  agentDetector: AgentReadyDetector | null
   scrollback: string[]
   scrollbackBytes: number
   onDataCallbacks: Array<(data: string) => void>
@@ -53,6 +59,7 @@ export class PtyManager {
     }
 
     const agentDef = this.configManager.getAgentDefinition(config.agent)
+    const isAgent = agentDef && config.agent !== '__shell__'
 
     // Build environment from agent definition
     // Filter out all Claude-related env vars to prevent nested session detection
@@ -80,6 +87,24 @@ export class PtyManager {
       env,
     })
 
+    // Create communication components
+    const shellDetector = isAgent
+      ? new ShellReadyDetector(paneId, { stripSentinel: true })
+      : null
+
+    const stateAnalyzer = new OutputStateAnalyzer({
+      idleThresholdMs: 5000,
+      onStatusChange: (status) => {
+        const e = this.entries.get(paneId)
+        if (e) {
+          e.status = status
+          for (const cb of e.onStatusCallbacks) {
+            cb(status)
+          }
+        }
+      },
+    })
+
     const entry: PtyEntry = {
       pty: term,
       config,
@@ -87,6 +112,9 @@ export class PtyManager {
       meta: {},
       parser: new StatuslineParser(),
       activityParser: new ActivityParser(),
+      stateAnalyzer,
+      shellDetector,
+      agentDetector: null, // Created after shell is ready
       scrollback: [],
       scrollbackBytes: 0,
       onDataCallbacks: [],
@@ -99,9 +127,23 @@ export class PtyManager {
 
     // Handle PTY output
     term.onData((data: string) => {
-      const { cleanData, meta } = entry.parser.parse(data)
+      // Feed shell ready detector (strips sentinel from output)
+      let processedData = data
+      if (entry.shellDetector && !entry.shellDetector.isDone) {
+        processedData = entry.shellDetector.feed(data)
+      }
+
+      // Feed agent ready detector
+      if (entry.agentDetector && !entry.agentDetector.isDone) {
+        entry.agentDetector.feed(processedData)
+      }
+
+      const { cleanData, meta } = entry.parser.parse(processedData)
 
       if (cleanData) {
+        // Feed state analyzer (hot path — just timestamp + timer reset)
+        entry.stateAnalyzer.onOutput()
+
         // Buffer for scrollback replay
         entry.scrollback.push(cleanData)
         entry.scrollbackBytes += cleanData.length
@@ -118,6 +160,13 @@ export class PtyManager {
 
       if (meta) {
         entry.meta = { ...entry.meta, ...meta }
+
+        // Feed to state analyzer and agent ready detector
+        entry.stateAnalyzer.onMeta(meta)
+        if (entry.agentDetector && !entry.agentDetector.isDone) {
+          entry.agentDetector.onMeta(meta)
+        }
+
         for (const cb of entry.onMetaCallbacks) {
           cb(entry.meta)
         }
@@ -138,21 +187,59 @@ export class PtyManager {
     term.onExit(({ exitCode }) => {
       const e = this.entries.get(paneId)
       if (e) {
-        e.status = exitCode === 0 ? 'stopped' : 'error'
-        for (const cb of e.onStatusCallbacks) {
-          cb(e.status)
-        }
+        e.stateAnalyzer.onExit(exitCode)
+        // Dispose detectors
+        e.shellDetector?.dispose()
+        e.agentDetector?.dispose()
       }
     })
 
-    // After shell initializes, send the agent command (skip for plain shell)
-    if (agentDef && config.agent !== '__shell__') {
-      setTimeout(() => {
-        this.sendAgentCommand(paneId, config, agentDef)
-      }, 800)
+    // Shell ready → Agent command → Agent ready → Task
+    if (isAgent && shellDetector) {
+      this.startAgentSequence(paneId, config, agentDef!, shellDetector)
     }
 
     return term.pid
+  }
+
+  /**
+   * Orchestrates the shell → agent → task startup sequence using
+   * event-driven detectors instead of hardcoded setTimeout delays.
+   */
+  private async startAgentSequence(
+    paneId: string,
+    config: PaneConfig,
+    agentDef: AgentDefinition,
+    shellDetector: ShellReadyDetector,
+  ): Promise<void> {
+    const entry = this.entries.get(paneId)
+    if (!entry) return
+
+    // Step 1: Wait for shell to be ready
+    const shellResult = await shellDetector.start(entry.pty)
+    if (!this.entries.has(paneId)) return // pane was killed while waiting
+
+    console.log(`[PTY] Shell ready for ${paneId}: detected=${shellResult.detected} (${shellResult.elapsedMs}ms)`)
+
+    // Step 2: Send agent command
+    this.sendAgentCommand(paneId, config, agentDef)
+
+    // Step 3: If there's a task, wait for agent to be ready before sending
+    if (config.task && config.restore !== 'manual') {
+      const agentDetector = new AgentReadyDetector({
+        quiescenceMs: 3000,
+        hardTimeoutMs: 15000,
+      })
+      entry.agentDetector = agentDetector
+
+      const agentResult = await agentDetector.start()
+      if (!this.entries.has(paneId)) return // pane was killed while waiting
+
+      console.log(`[PTY] Agent ready for ${paneId}: reason=${agentResult.reason} (${agentResult.elapsedMs}ms)`)
+
+      // Send the task
+      entry.pty.write(config.task + '\r')
+    }
   }
 
   private sendAgentCommand(paneId: string, config: PaneConfig, agentDef: AgentDefinition): void {
@@ -176,16 +263,6 @@ export class PtyManager {
 
     // Send the command to start the agent
     entry.pty.write(cmd + '\r')
-
-    // If there's a task, send it after a brief delay for the agent to initialize
-    if (config.task && config.restore !== 'manual') {
-      setTimeout(() => {
-        const e = this.entries.get(paneId)
-        if (e) {
-          e.pty.write(config.task + '\r')
-        }
-      }, 2000)
-    }
   }
 
   write(paneId: string, data: string): void {
@@ -209,6 +286,12 @@ export class PtyManager {
   kill(paneId: string): void {
     const entry = this.entries.get(paneId)
     if (entry) {
+      // Clean up comm components
+      entry.stateAnalyzer.dispose()
+      entry.shellDetector?.dispose()
+      entry.agentDetector?.dispose()
+      entry.parser.reset()
+
       try {
         entry.pty.kill()
       } catch {
