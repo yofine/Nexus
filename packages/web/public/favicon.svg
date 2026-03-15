@@ -1,24 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#06b6d4"/>
+    <!-- 主体渐变色 (代表数字世界与连接) -->
+    <linearGradient id="nexusGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C6FF"/>
+      <stop offset="100%" stop-color="#0072FF"/>
     </linearGradient>
   </defs>
-  <!-- background -->
-  <rect width="128" height="128" rx="28" fill="#0f172a"/>
-  <!-- connection lines -->
-  <line x1="40" y1="40" x2="88" y2="40" stroke="url(#g)" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
-  <line x1="40" y1="40" x2="64" y2="88" stroke="url(#g)" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
-  <line x1="88" y1="40" x2="64" y2="88" stroke="url(#g)" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
-  <!-- center nexus point -->
-  <circle cx="64" cy="56" r="6" fill="url(#g)" opacity="0.4"/>
-  <!-- nodes -->
-  <circle cx="40" cy="40" r="12" fill="url(#g)"/>
-  <circle cx="88" cy="40" r="12" fill="url(#g)"/>
-  <circle cx="64" cy="88" r="12" fill="url(#g)"/>
-  <!-- node inner dots -->
-  <circle cx="40" cy="40" r="4" fill="#0f172a"/>
-  <circle cx="88" cy="40" r="4" fill="#0f172a"/>
-  <circle cx="64" cy="88" r="4" fill="#0f172a"/>
+
+  <!-- 工作台背景 (深色圆角矩形，贴合终端界面) -->
+  <rect width="64" height="64" rx="16" fill="#0D1117"/>
+
+  <!-- CLI 提示符 '>' -->
+  <path d="M 14 18 L 28 32 L 14 46" 
+        fill="none" 
+        stroke="url(#nexusGrad)" 
+        stroke-width="5" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+
+  <!-- 连接线 (代表分发与并行观测) -->
+  <path d="M 32 32 L 44 18 M 32 32 L 48 32 M 32 32 L 44 46" 
+        fill="none" 
+        stroke="#475569" 
+        stroke-width="3" 
+        stroke-linecap="round"/>
+
+  <!-- Nexus 核心观测点 (Review 枢纽) -->
+  <circle cx="32" cy="32" r="4" fill="#00C6FF"/>
+
+  <!-- 并行的 多 Agent 节点 (使用不同颜色代表不同能力的 Agent) -->
+  <circle cx="46" cy="18" r="5" fill="#10B981"/> <!-- 绿色 Agent (执行) -->
+  <circle cx="50" cy="32" r="5" fill="#F59E0B"/> <!-- 橙色 Agent (分析) -->
+  <circle cx="46" cy="46" r="5" fill="#8B5CF6"/> <!-- 紫色 Agent (创造/校验) -->
 </svg>
