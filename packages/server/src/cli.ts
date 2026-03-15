@@ -2,6 +2,14 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { startServer } from './index.ts'
 
+// Check Node.js version — node-pty requires Node 22+
+const nodeVersion = parseInt(process.versions.node.split('.')[0], 10)
+if (nodeVersion < 22) {
+  console.error(`Error: Nexus requires Node.js >= 22, but you are running v${process.versions.node}`)
+  console.error(`  Please upgrade: nvm install 22 && nvm use 22`)
+  process.exit(1)
+}
+
 // Clean up parent session env so spawned PTYs don't detect nesting
 delete process.env.CLAUDECODE
 delete process.env.CLAUDE_CODE

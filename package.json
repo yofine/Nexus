@@ -17,6 +17,7 @@
     "build:server": "pnpm --filter @nexus/server build",
     "build": "pnpm run build:web && pnpm run build:server",
     "start": "NEXUS_PROJECT_DIR=$PWD node packages/server/dist/cli.mjs",
+    "postinstall": "node -e \"try{require('node-pty')}catch(e){console.error('\\n⚠️  node-pty native module failed to build.\\nPlease run: cd node_modules/node-pty && npx node-gyp rebuild\\nOr ensure Xcode Command Line Tools are installed: xcode-select --install\\n');process.exit(1)}\"",
     "prepublishOnly": "pnpm run build"
   },
   "engines": {
