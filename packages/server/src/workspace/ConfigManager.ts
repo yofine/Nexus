@@ -183,7 +183,17 @@ export class ConfigManager {
     const global = this.loadGlobalConfig()
     const configured = global.defaults.shell
     // Prefer zsh > configured > $SHELL > /bin/sh
-    const candidates = ['/usr/bin/zsh', '/bin/zsh', configured, process.env.SHELL, '/bin/sh']
+    // Include macOS Homebrew paths for Apple Silicon and Intel
+    const candidates = [
+      '/opt/homebrew/bin/zsh',  // macOS Apple Silicon Homebrew
+      '/usr/local/bin/zsh',     // macOS Intel Homebrew
+      '/usr/bin/zsh',           // Linux
+      '/bin/zsh',               // macOS default / Linux
+      configured,
+      process.env.SHELL,
+      '/bin/bash',
+      '/bin/sh',
+    ]
     for (const sh of candidates) {
       if (!sh) continue
       try {

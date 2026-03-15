@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { PaneConfig, PaneStatus, PaneMeta, AgentDefinition, FileActivity } from '../types.ts'
 import { StatuslineParser } from '../comm/StatuslineParser.ts'
@@ -43,6 +44,7 @@ export class PtyManager {
     }
 
     const shell = this.configManager.getShell()
+    console.log(`[PTY] Using shell: ${shell} for pane ${paneId}`)
     const projectDir = this.configManager.getProjectDir()
     // Worktree panes use worktreePath as base; shared panes use projectDir
     const basePath = (config.isolation === 'worktree' && config.worktreePath)
@@ -55,7 +57,16 @@ export class PtyManager {
     // Validate cwd exists — posix_spawnp fails if cwd is invalid
     if (!fs.existsSync(cwd)) {
       console.warn(`[PTY] cwd does not exist: ${cwd}, falling back to ${projectDir}`)
-      cwd = fs.existsSync(projectDir) ? projectDir : (process.env.HOME || '/')
+      cwd = fs.existsSync(projectDir) ? projectDir : os.homedir()
+    }
+
+    // Validate shell binary exists, fall back gracefully
+    let resolvedShell = shell
+    if (!fs.existsSync(resolvedShell)) {
+      const fallbacks = ['/bin/zsh', '/bin/bash', '/bin/sh']
+      const found = fallbacks.find(s => fs.existsSync(s))
+      console.error(`[PTY] Shell binary not found: ${resolvedShell}, falling back to ${found || '/bin/sh'}`)
+      resolvedShell = found || '/bin/sh'
     }
 
     const agentDef = this.configManager.getAgentDefinition(config.agent)
@@ -79,7 +90,17 @@ export class PtyManager {
       }
     }
 
-    const term = pty.spawn(shell, [], {
+    // Ensure PATH is set — on some systems (e.g. macOS launchd) it may be missing
+    if (!env.PATH) {
+      env.PATH = '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+      if (process.platform === 'darwin') {
+        env.PATH = '/opt/homebrew/bin:/opt/homebrew/sbin:' + env.PATH
+      }
+    }
+
+    console.log(`[PTY] Spawning pane ${paneId}: shell=${resolvedShell}, cwd=${cwd}`)
+
+    const term = pty.spawn(resolvedShell, [], {
       name: 'xterm-256color',
       cols,
       rows,

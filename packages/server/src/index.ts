@@ -40,7 +40,8 @@ export async function startServer(port: number, projectDir: string) {
 
   // Session recorder — records replay history
   const wsConfig = configManager.loadWorkspaceConfig()
-  const recorder = new SessionRecorder(projectDir, wsConfig?.name || 'Nexus')
+  const globalConfig = configManager.loadGlobalConfig()
+  const recorder = new SessionRecorder(projectDir, wsConfig?.name || 'Nexus', globalConfig.defaults.history_retention_days)
 
   workspaceManager.onEvents({
     onPaneAdded: (pane) => recorder.onPaneAdded(pane),
@@ -181,6 +182,19 @@ export async function startServer(port: number, projectDir: string) {
     const turn = SessionRecorder.getTurn(projectDir, sessionId, turnId)
     if (!turn) { reply.code(404); return { error: 'Turn not found' } }
     return turn
+  })
+
+  // Delete a single replay session
+  fastify.delete('/api/replay/sessions/:sessionId', async (request) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const deleted = SessionRecorder.deleteSession(projectDir, sessionId)
+    return { success: deleted }
+  })
+
+  // Delete all replay sessions
+  fastify.delete('/api/replay/sessions', async () => {
+    const count = SessionRecorder.deleteAllSessions(projectDir)
+    return { success: true, deleted: count }
   })
 
   // Dependency graph endpoint — cached with TTL to avoid repeated full-scan

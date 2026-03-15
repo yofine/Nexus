@@ -693,8 +693,8 @@ function layoutTemporal(
   for (let i = 1; i < Math.min(touchedOrdered.length, 40); i++) {
     const prev = touchedOrdered[i - 1]
     const curr = touchedOrdered[i]
-    const agentType = fileAgent.get(curr) || 'workspace'
-    const color = getAgentColor(agentType)
+    const paneId = filePaneId.get(curr) || ''
+    const color = paneId ? getPaneColorById(paneId, panes) : 'var(--text-muted)'
     edges.push({
       id: `__seq:${i}`,
       source: prev,
@@ -720,7 +720,7 @@ function layoutTemporal(
 function FileNodeComponent({ data }: { data: FileNodeData }) {
   const hasActivity = data.activeAgents.length > 0
   const primaryAgent = data.activeAgents[0]
-  const agentColor = primaryAgent ? getAgentColor(primaryAgent.agent) : null
+  const agentColor = primaryAgent ? getPaneColorById(primaryAgent.paneId, _currentPanes) : null
   const roleMeta = ROLE_META[data.role]
   const gitMeta = GIT_STATUS_META[data.gitStatus]
   const heatBg = heatToColor(data.heat, data.maxHeat)
@@ -816,19 +816,22 @@ function FileNodeComponent({ data }: { data: FileNodeData }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           {hasActivity ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {data.activeAgents.map((a) => (
+              {data.activeAgents.map((a) => {
+                const c = getPaneColorById(a.paneId, _currentPanes)
+                return (
                 <div key={a.paneId} style={{
                   display: 'flex', alignItems: 'center', gap: 3, fontSize: 8,
-                  color: getAgentColor(a.agent), fontWeight: 600, maxWidth: '100%',
+                  color: c, fontWeight: 600, maxWidth: '100%',
                 }}>
                   <div style={{
-                    width: 4, height: 4, borderRadius: '50%', background: getAgentColor(a.agent),
+                    width: 4, height: 4, borderRadius: '50%', background: c,
                     animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0,
                   }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.paneName}</span>
                   <span style={{ opacity: 0.5, fontWeight: 400 }}>{a.action}</span>
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : data.lastAgent ? (
             <div style={{ fontSize: 8, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -930,7 +933,7 @@ function DirNodeComponent({ data }: { data: DirNodeData }) {
 
         {/* Active agent names */}
         {data.activeAgentList.map((a) => {
-          const color = getAgentColor(a.agent)
+          const color = getPaneColorById(a.paneId, _currentPanes)
           return (
             <span
               key={a.paneId}
@@ -1031,7 +1034,7 @@ function buildFlowData(ctx: BuildContext, viewMode: ViewMode): { nodes: Node[]; 
       break
     }
     case 'temporal': {
-      const r = layoutTemporal(graph, activities)
+      const r = layoutTemporal(graph, activities, panes)
       positions = r.positions
       extraEdges = r.edges
       break
@@ -1083,7 +1086,7 @@ function buildFlowData(ctx: BuildContext, viewMode: ViewMode): { nodes: Node[]; 
         if (!nodeIds.has(imp)) continue
         const isActive = activeFiles.has(node.id)
         const agentInfo = activeFileAgents.get(node.id)?.[0]
-        const color = isActive && agentInfo ? getAgentColor(agentInfo.agent) : 'var(--text-muted)'
+        const color = isActive && agentInfo ? getPaneColorById(agentInfo.paneId, panes) : 'var(--text-muted)'
         edges.push({
           id: `${node.id}->${imp}`,
           source: node.id,
@@ -1113,7 +1116,7 @@ const MINIMAP_STYLE = { background: 'var(--bg-surface)', border: '1px solid var(
 function minimapNodeColor(node: Node) {
   const data = node.data as FileNodeData
   if (data?.conflicting) return '#FBBF24'
-  if (data?.activeAgents?.length > 0) return getAgentColor(data.activeAgents[0].agent)
+  if (data?.activeAgents?.length > 0) return getPaneColorById(data.activeAgents[0].paneId, _currentPanes)
   if (data?.gitStatus === 'modified') return '#F0883E'
   if (data?.gitStatus === 'added') return '#3FB950'
   return 'var(--bg-elevated)'

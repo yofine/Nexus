@@ -31,6 +31,7 @@ const HISTORY_DIR = '.nexus/history'
 const SESSIONS_INDEX = 'sessions.json'
 const TERMINAL_BATCH_MS = 200
 const MAX_TERMINAL_BYTES_PER_TURN = 256 * 1024 // 256KB cap per turn
+const MAX_SESSIONS = 50
 
 interface ActiveTurn {
   turn: ReplayTurn
@@ -48,12 +49,15 @@ export class SessionRecorder {
   private sessionDir: string
   private activeTurns = new Map<string, ActiveTurn>() // paneId -> current turn
   private turnCounter = 0
+  private retentionDays: number
 
-  constructor(projectDir: string, projectName: string) {
+  constructor(projectDir: string, projectName: string, retentionDays = 30) {
     this.projectDir = projectDir
     const sessionId = `s-${Date.now()}`
     this.sessionDir = path.join(projectDir, HISTORY_DIR, sessionId)
     fs.mkdirSync(this.sessionDir, { recursive: true })
+
+    this.retentionDays = retentionDays
 
     this.session = {
       id: sessionId,
@@ -260,6 +264,86 @@ export class SessionRecorder {
     }
   }
 
+  /** Delete a single session and its directory. Returns true if deleted. */
+  static deleteSession(projectDir: string, sessionId: string): boolean {
+    // Remove session directory
+    const sessionDir = path.join(projectDir, HISTORY_DIR, sessionId)
+    if (fs.existsSync(sessionDir)) {
+      fs.rmSync(sessionDir, { recursive: true, force: true })
+    }
+
+    // Remove from index
+    const indexPath = path.join(projectDir, HISTORY_DIR, SESSIONS_INDEX)
+    if (fs.existsSync(indexPath)) {
+      try {
+        let sessions: ReplaySessionSummary[] = JSON.parse(fs.readFileSync(indexPath, 'utf-8'))
+        const before = sessions.length
+        sessions = sessions.filter(s => s.id !== sessionId)
+        if (sessions.length < before) {
+          fs.writeFileSync(indexPath, JSON.stringify(sessions, null, 2))
+          return true
+        }
+      } catch { /* ignore */ }
+    }
+    return false
+  }
+
+  /** Delete all sessions. Returns the number of sessions deleted. */
+  static deleteAllSessions(projectDir: string): number {
+    const sessions = SessionRecorder.listSessions(projectDir)
+    let count = 0
+    for (const session of sessions) {
+      const sessionDir = path.join(projectDir, HISTORY_DIR, session.id)
+      if (fs.existsSync(sessionDir)) {
+        fs.rmSync(sessionDir, { recursive: true, force: true })
+        count++
+      }
+    }
+    // Reset index
+    const indexPath = path.join(projectDir, HISTORY_DIR, SESSIONS_INDEX)
+    fs.writeFileSync(indexPath, JSON.stringify([], null, 2))
+    return count
+  }
+
+  /**
+   * Passive cleanup: prune sessions exceeding max count or older than retentionDays.
+   * Called automatically when saving a new session.
+   */
+  static pruneOldSessions(projectDir: string, retentionDays: number): number {
+    const indexPath = path.join(projectDir, HISTORY_DIR, SESSIONS_INDEX)
+    if (!fs.existsSync(indexPath)) return 0
+
+    let sessions: ReplaySessionSummary[]
+    try {
+      sessions = JSON.parse(fs.readFileSync(indexPath, 'utf-8'))
+    } catch { return 0 }
+
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+    const keep: ReplaySessionSummary[] = []
+    const remove: ReplaySessionSummary[] = []
+
+    for (const s of sessions) {
+      if (s.startedAt < cutoff || keep.length >= MAX_SESSIONS) {
+        remove.push(s)
+      } else {
+        keep.push(s)
+      }
+    }
+
+    if (remove.length === 0) return 0
+
+    // Delete session directories
+    for (const s of remove) {
+      const sessionDir = path.join(projectDir, HISTORY_DIR, s.id)
+      if (fs.existsSync(sessionDir)) {
+        fs.rmSync(sessionDir, { recursive: true, force: true })
+      }
+    }
+
+    fs.writeFileSync(indexPath, JSON.stringify(keep, null, 2))
+    return remove.length
+  }
+
   // ─── Internal ─────────────────────────────────────────────
 
   private startTurn(paneId: string, paneName: string, agent: AgentType, task?: string): void {
@@ -416,9 +500,12 @@ export class SessionRecorder {
       totalDurationMs,
     })
 
-    // Keep last 50 sessions
-    sessions = sessions.slice(0, 50)
-
     fs.writeFileSync(indexPath, JSON.stringify(sessions, null, 2))
+
+    // Passive cleanup: prune sessions exceeding retention or max count
+    const pruned = SessionRecorder.pruneOldSessions(this.projectDir, this.retentionDays)
+    if (pruned > 0) {
+      console.log(`[SessionRecorder] Pruned ${pruned} old session(s)`)
+    }
   }
 }

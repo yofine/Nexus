@@ -129,7 +129,7 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
 
   return (
     <div className="dialog-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="add-pane-dialog" style={{ width: 720, maxWidth: '95vw' }}>
+      <div className="add-pane-dialog">
         <h2 className="dialog-title">Add Pane</h2>
 
         <form onSubmit={handleSubmit} className="dialog-form">

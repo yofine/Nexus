@@ -95,14 +95,33 @@ function DiffView({ diff }: { diff: string }) {
 function SessionListView({ onSelectSession }: { onSelectSession: (id: string) => void }) {
   const [sessions, setSessions] = useState<ReplaySessionSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
 
-  useEffect(() => {
+  const loadSessions = useCallback(() => {
     setLoading(true)
     fetch('/api/replay/sessions')
       .then(r => r.json())
       .then(setSessions)
       .catch(() => {})
       .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { loadSessions() }, [loadSessions])
+
+  const deleteSession = useCallback(async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation()
+    try {
+      await fetch(`/api/replay/sessions/${sessionId}`, { method: 'DELETE' })
+      setSessions(prev => prev.filter(s => s.id !== sessionId))
+    } catch { /* ignore */ }
+  }, [])
+
+  const clearAllSessions = useCallback(async () => {
+    try {
+      await fetch('/api/replay/sessions', { method: 'DELETE' })
+      setSessions([])
+    } catch { /* ignore */ }
+    setConfirmClearAll(false)
   }, [])
 
   if (loading) {
@@ -131,9 +150,31 @@ function SessionListView({ onSelectSession }: { onSelectSession: (id: string) =>
       <div className="replay-list-header">
         <History className="icon-sm" style={{ color: 'var(--accent-primary)' }} />
         <span>Session History</span>
-        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', flex: 1 }}>
           {sessions.length} sessions
         </span>
+        {sessions.length > 0 && (
+          confirmClearAll ? (
+            <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Clear all?</span>
+              <button className="replay-clear-btn replay-clear-btn--danger" onClick={clearAllSessions}>
+                Confirm
+              </button>
+              <button className="replay-clear-btn" onClick={() => setConfirmClearAll(false)}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              className="replay-clear-btn"
+              onClick={() => setConfirmClearAll(true)}
+              title="Clear all history"
+            >
+              <Trash2 size={12} />
+              <span>Clear All</span>
+            </button>
+          )
+        )}
       </div>
       {sessions.map(session => (
         <button
@@ -150,7 +191,16 @@ function SessionListView({ onSelectSession }: { onSelectSession: (id: string) =>
             <span>{session.paneCount} agents</span>
             <span>{formatDuration(session.totalDurationMs)}</span>
           </div>
-          <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexShrink: 0 }}>
+            <button
+              className="replay-delete-btn"
+              onClick={(e) => deleteSession(e, session.id)}
+              title="Delete session"
+            >
+              <Trash2 size={12} />
+            </button>
+            <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+          </div>
         </button>
       ))}
     </div>

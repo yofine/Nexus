@@ -513,23 +513,11 @@ body {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--space-2xl);
-  width: 500px;
-  max-width: 100%;
+  width: 720px;
+  max-width: 95vw;
   max-height: calc(100vh - var(--space-2xl) * 2);
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-@media (min-width: 768px) {
-  .add-pane-dialog {
-    width: 540px;
-  }
-}
-
-@media (min-width: 1600px) {
-  .add-pane-dialog {
-    width: 600px;
-  }
 }
 
 .dialog-title {
@@ -1282,6 +1270,61 @@ body {
 .replay-session-card:hover {
   border-color: var(--accent-primary);
   background: var(--bg-overlay);
+}
+
+.replay-session-card:hover .replay-delete-btn {
+  opacity: 1;
+}
+
+.replay-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.replay-delete-btn:hover {
+  color: #F85149;
+  background: color-mix(in srgb, #F85149 12%, transparent);
+}
+
+.replay-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 3px var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.replay-clear-btn:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-muted);
+}
+
+.replay-clear-btn--danger {
+  color: #F85149;
+  border-color: #F85149;
+}
+
+.replay-clear-btn--danger:hover {
+  background: color-mix(in srgb, #F85149 12%, transparent);
+  color: #F85149;
+  border-color: #F85149;
 }
 
 .replay-session-card__main {
