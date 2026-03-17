@@ -288,3 +288,348 @@ ConfigManager 持久化
 6. 选择一个外部会话 → 验证 pane 正确以 `--resume` 启动
 7. Cmd+K → "Resume Session..." → 验证 AddPaneDialog 以 Resume 模式打开
 8. 重启 Nexus 服务 → 验证所有带 sessionId 的 pane 自动恢复
+
+---
+
+## 多 Agent 会话发现扩展方案
+
+### 现状问题
+
+当前 `SessionDiscovery` 存在三个硬编码限制：
+
+1. **命令硬编码** — `fetchSessions()` 只认 `claude sessions list --output json`，通过 `agentDef.bin !== 'claude'` 直接短路其他 Agent
+2. **解析硬编码** — 返回结构假设 Claude Code 的 JSON schema（`session_id`, `cost_usd`, `num_turns` 等 snake_case 字段）
+3. **缓存不分类** — 单一 `this.cache` 对象，不区分 Agent 类型；切换 agent 查询时返回错误缓存
+
+### 设计目标
+
+将 `SessionDiscovery` 改造为**可插拔的多 Agent 会话发现框架**，每种 Agent 类型注册独立的发现策略，同时保持向后兼容。
+
+### 架构设计
+
+```
+SessionDiscovery (协调器)
+    │
+    ├── AgentSessionProvider (接口)
+    │       ├── listSessions(): Promise<DiscoveredSession[]>
+    │       └── isAvailable(): boolean
+    │
+    ├── ClaudeCodeProvider    — `claude sessions list --output json`
+    ├── OpenCodeProvider      — 读取 ~/.opencode/sessions/ 目录 (或对应 CLI)
+    ├── KimiCliProvider       — (待 Kimi CLI 支持 session list 后实现)
+    └── FallbackProvider      — 仅返回 Nexus 内部记录的 session
+```
+
+### 接口定义
+
+**文件**: `packages/server/src/workspace/SessionDiscovery.ts`
+
+```typescript
+/**
+ * 每种 Agent 类型实现此接口来提供会话发现能力
+ */
+export interface AgentSessionProvider {
+  /** Agent 类型标识 */
+  readonly agentType: AgentType
+
+  /** 检查该 Agent CLI 是否可用（bin 存在且支持 session list） */
+  isAvailable(): boolean
+
+  /**
+   * 列出该 Agent 的历史会话
+   * 实现方需自行处理超时和错误，返回空数组而非抛异常
+   */
+  listSessions(): Promise<DiscoveredSession[]>
+}
+```
+
+### Provider 实现
+
+#### ClaudeCodeProvider
+
+```typescript
+class ClaudeCodeProvider implements AgentSessionProvider {
+  readonly agentType: AgentType = 'claudecode'
+
+  constructor(private agentDef: AgentDefinition) {}
+
+  isAvailable(): boolean {
+    return !!this.agentDef.bin
+  }
+
+  async listSessions(): Promise<DiscoveredSession[]> {
+    const { stdout } = await execFileAsync(
+      this.agentDef.bin,
+      ['sessions', 'list', '--output', 'json'],
+      { timeout: 10_000 }
+    )
+    const parsed = JSON.parse(stdout.trim())
+    const items: ClaudeSession[] = Array.isArray(parsed) ? parsed : (parsed.sessions || [])
+    return items.map(s => ({
+      sessionId: s.session_id,
+      summary: s.summary,
+      model: s.model,
+      costUsd: s.cost_usd,
+      numTurns: s.num_turns,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+      projectPath: s.project_path,
+      source: 'external',
+    }))
+  }
+}
+```
+
+#### OpenCodeProvider（示例）
+
+```typescript
+class OpenCodeProvider implements AgentSessionProvider {
+  readonly agentType: AgentType = 'opencode'
+
+  constructor(private agentDef: AgentDefinition) {}
+
+  isAvailable(): boolean {
+    return !!this.agentDef.bin
+    // 后续可检查 `opencode --version` 是否支持 session 子命令
+  }
+
+  async listSessions(): Promise<DiscoveredSession[]> {
+    // 方案 A: 如果 opencode 支持 CLI 查询
+    // const { stdout } = await execFileAsync(this.agentDef.bin, ['session', 'list', '--json'])
+
+    // 方案 B: 直接读取本地存储文件（如 ~/.opencode/sessions/*.json）
+    // const sessionsDir = path.join(os.homedir(), '.opencode', 'sessions')
+    // ...
+
+    return [] // 暂未实现，返回空数组
+  }
+}
+```
+
+#### FallbackProvider（兜底）
+
+```typescript
+/**
+ * 对于没有专属 Provider 的 Agent 类型，只返回空数组
+ * Nexus 内部记录的 session 由 SessionDiscovery 在合并层统一处理
+ */
+class FallbackProvider implements AgentSessionProvider {
+  readonly agentType: AgentType
+
+  constructor(agentType: AgentType) {
+    this.agentType = agentType
+  }
+
+  isAvailable(): boolean { return false }
+  async listSessions(): Promise<DiscoveredSession[]> { return [] }
+}
+```
+
+### SessionDiscovery 改造
+
+```typescript
+export class SessionDiscovery {
+  private providers = new Map<AgentType, AgentSessionProvider>()
+  private cacheByAgent = new Map<string, { sessions: DiscoveredSession[]; ts: number }>()
+
+  constructor(private configManager: ConfigManager) {
+    this.registerBuiltinProviders()
+  }
+
+  /** 注册内置 Provider */
+  private registerBuiltinProviders() {
+    const agents = this.configManager.getGlobalConfig().agents
+
+    if (agents.claudecode) {
+      this.register(new ClaudeCodeProvider(agents.claudecode))
+    }
+    if (agents.opencode) {
+      this.register(new OpenCodeProvider(agents.opencode))
+    }
+    // 其他 Agent 类型由 FallbackProvider 兜底
+  }
+
+  /** 注册自定义 Provider（支持第三方扩展） */
+  register(provider: AgentSessionProvider) {
+    this.providers.set(provider.agentType, provider)
+  }
+
+  /** 按 Agent 类型列出外部会话，带独立缓存 */
+  async listSessions(agentType: AgentType = 'claudecode'): Promise<DiscoveredSession[]> {
+    const now = Date.now()
+    const cached = this.cacheByAgent.get(agentType)
+    if (cached && now - cached.ts < CACHE_TTL) {
+      return cached.sessions
+    }
+
+    const provider = this.providers.get(agentType) || new FallbackProvider(agentType)
+    let sessions: DiscoveredSession[] = []
+
+    if (provider.isAvailable()) {
+      try {
+        sessions = await provider.listSessions()
+      } catch (err) {
+        console.warn(`[SessionDiscovery] ${agentType} provider failed:`, (err as Error).message)
+      }
+    }
+
+    this.cacheByAgent.set(agentType, { sessions, ts: now })
+    return sessions
+  }
+}
+```
+
+### 关键改动点
+
+| 改动 | 说明 |
+|------|------|
+| `this.cache` → `this.cacheByAgent` | 按 Agent 类型独立缓存，避免 claudecode 缓存被当作 opencode 结果返回 |
+| `fetchSessions()` → Provider 模式 | 每种 Agent 自包含获取逻辑和输出解析，新增 Agent 只需实现 `AgentSessionProvider` |
+| `agentDef.bin !== 'claude'` 硬编码移除 | 改由各 Provider 的 `isAvailable()` 判断 |
+| `register()` 公开方法 | 允许未来通过插件/配置注册第三方 Agent 的 session provider |
+
+### AgentDefinition 扩展
+
+**文件**: `packages/server/src/types.ts`
+
+```typescript
+export interface AgentDefinition {
+  bin: string
+  continue_flag: string
+  resume_flag?: string
+  yolo_flag?: string
+  statusline: boolean
+  env?: Record<string, string>
+
+  // 新增：会话发现配置（可选）
+  session_list_cmd?: string[]    // e.g. ['sessions', 'list', '--output', 'json']
+  session_list_format?: 'json' | 'jsonl' | 'csv'  // 输出格式
+  session_storage_dir?: string   // 本地会话存储路径（用于文件系统发现）
+}
+```
+
+这让用户可以在 `~/.nexus/config.yaml` 中声明式配置新 Agent 的 session list 能力，无需修改代码：
+
+```yaml
+agents:
+  claudecode:
+    bin: claude
+    continue_flag: "--continue"
+    resume_flag: "--resume"
+    session_list_cmd: ["sessions", "list", "--output", "json"]
+    statusline: true
+
+  opencode:
+    bin: opencode
+    continue_flag: "--continue"
+    session_list_cmd: ["session", "list", "--json"]
+    statusline: false
+
+  custom-agent:
+    bin: my-agent
+    continue_flag: "--resume-last"
+    resume_flag: "--session"
+    session_storage_dir: "~/.my-agent/sessions"
+    statusline: false
+```
+
+### 通用 ConfigDrivenProvider
+
+除了手写 Provider，还可以基于 `AgentDefinition` 中的新字段实现一个**配置驱动的通用 Provider**：
+
+```typescript
+class ConfigDrivenProvider implements AgentSessionProvider {
+  readonly agentType: AgentType
+
+  constructor(
+    agentType: AgentType,
+    private agentDef: AgentDefinition,
+  ) {
+    this.agentType = agentType
+  }
+
+  isAvailable(): boolean {
+    return !!(this.agentDef.session_list_cmd || this.agentDef.session_storage_dir)
+  }
+
+  async listSessions(): Promise<DiscoveredSession[]> {
+    // 优先使用 CLI 命令
+    if (this.agentDef.session_list_cmd?.length) {
+      const [cmd, ...args] = this.agentDef.session_list_cmd
+      const bin = this.agentDef.bin
+      const { stdout } = await execFileAsync(bin, args, { timeout: 10_000 })
+      return this.parseOutput(stdout)
+    }
+
+    // 其次扫描本地存储目录
+    if (this.agentDef.session_storage_dir) {
+      return this.scanStorageDir(this.agentDef.session_storage_dir)
+    }
+
+    return []
+  }
+
+  private parseOutput(stdout: string): DiscoveredSession[] {
+    // 通用 JSON 解析，尝试适配不同 Agent 的输出格式
+    const parsed = JSON.parse(stdout.trim())
+    const items = Array.isArray(parsed) ? parsed : (parsed.sessions || parsed.items || [])
+
+    return items.map((s: Record<string, unknown>) => ({
+      sessionId: String(s.session_id || s.sessionId || s.id || ''),
+      summary: s.summary || s.description || s.name || undefined,
+      model: s.model || undefined,
+      costUsd: typeof s.cost_usd === 'number' ? s.cost_usd : (typeof s.cost === 'number' ? s.cost : undefined),
+      numTurns: typeof s.num_turns === 'number' ? s.num_turns : (typeof s.turns === 'number' ? s.turns : undefined),
+      createdAt: s.created_at || s.createdAt || undefined,
+      updatedAt: s.updated_at || s.updatedAt || undefined,
+      projectPath: s.project_path || s.projectPath || s.cwd || undefined,
+      source: 'external' as const,
+    }))
+  }
+
+  private async scanStorageDir(dir: string): Promise<DiscoveredSession[]> {
+    // 展开 ~ 并扫描 JSON 文件
+    const resolved = dir.replace(/^~/, os.homedir())
+    // ... 读取 *.json，提取 session 信息
+    return []
+  }
+}
+```
+
+这样 `registerBuiltinProviders()` 简化为：
+
+```typescript
+private registerBuiltinProviders() {
+  const agents = this.configManager.getGlobalConfig().agents
+  for (const [agentType, agentDef] of Object.entries(agents)) {
+    // Claude Code 使用专属 Provider（字段映射已确定）
+    if (agentType === 'claudecode') {
+      this.register(new ClaudeCodeProvider(agentDef))
+    }
+    // 其他 Agent 使用配置驱动的通用 Provider
+    else if (agentDef.session_list_cmd || agentDef.session_storage_dir) {
+      this.register(new ConfigDrivenProvider(agentType as AgentType, agentDef))
+    }
+  }
+}
+```
+
+### 前端适配
+
+前端无需感知 Provider 细节，`GET /api/sessions?agent=xxx` 的接口和 `DiscoveredSession` 类型保持不变。AddPaneDialog 已按 agent 类型过滤请求，天然支持多 Agent。
+
+唯一的 UI 考虑：当某个 Agent 不支持会话发现时（`sessions` 返回空数组），Resume Session 面板应显示提示：
+
+```
+No session history available for {AgentName}.
+This agent may not support session listing.
+```
+
+### 实施优先级
+
+| 阶段 | 内容 | 依赖 |
+|------|------|------|
+| **Phase 1** (本次) | 前端 UI 增强（覆盖层、CommandPalette、tooltip） | 无 |
+| **Phase 2** | SessionDiscovery 重构为 Provider 模式 + 按 Agent 独立缓存 | Phase 1 |
+| **Phase 3** | AgentDefinition 新增 `session_list_cmd` / `session_storage_dir` | Phase 2 |
+| **Phase 4** | ConfigDrivenProvider + 各 Agent 适配 | Phase 3，各 Agent CLI 需支持 session list |
