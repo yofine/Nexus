@@ -2,7 +2,7 @@
 
 export type PaneStatus = 'running' | 'waiting' | 'idle' | 'stopped' | 'error'
 export type RestoreMode = 'continue' | 'restart' | 'manual' | 'resume'
-export type AgentType = 'claudecode' | 'codex' | 'opencode' | 'kimi-cli' | 'qwencode' | '__shell__'
+export type AgentType = 'claudecode' | 'codex' | 'opencode' | 'kimi-cli' | 'qodercli' | '__shell__'
 export type IsolationMode = 'shared' | 'worktree'
 
 export interface PaneMeta {
@@ -82,6 +82,8 @@ export type ClientEvent =
   | { type: 'git.unstage.all' }
   | { type: 'git.commit'; message: string }
   | { type: 'git.push' }
+  | { type: 'pane.merge'; paneId: string }
+  | { type: 'pane.discard'; paneId: string }
   | { type: 'pane.diff.refresh'; paneId: string }
   | { type: 'workspace.save' }
   | { type: 'session.list'; paneId?: string }
@@ -98,6 +100,7 @@ export type ServerEvent =
   | { type: 'git.result'; action: string; success: boolean; message: string }
   | { type: 'git.branchInfo'; branch: string; remote?: string; ahead: number; behind: number }
   | { type: 'pane.diff'; paneId: string; diffs: FileDiff[] }
+  | { type: 'pane.merge.result'; paneId: string; success: boolean; message: string }
   | { type: 'pane.activity'; paneId: string; activity: FileActivity }
   | { type: 'file.activity'; activity: FileActivity }
   | { type: 'workspace.state'; state: WorkspaceState }

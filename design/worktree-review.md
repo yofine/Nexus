@@ -1,138 +1,138 @@
 # Worktree 模式 Review & 用户路径设计
 
-## 现有能力盘点
+## 设计决策
 
-| 层 | 实现 | 状态 |
+参考 Claude Squad 的做法（worktree 隔离 + keep/remove 模型），结合 Nexus 自身的 Web Review 面板优势，确定以下方案：
+
+- **合并方式**：本地 `git merge`（方案 A），不依赖 GitHub
+- **关闭 pane 时**：默认保留 branch，不弹确认框
+- **用户角色**：审查者，不操作 worktree 内部的 stage/commit
+- **Review 面板**：不提供 stage/unstage/commit，只提供 Merge 和 Discard 两个决策按钮
+
+## 用户路径
+
+```
+创建 → 工作 → 审查 → 合并/丢弃
+```
+
+| 阶段 | 用户操作 | 状态 |
 |---|---|---|
-| **WorktreeManager** | git worktree add/remove/cleanup, branch naming `nexus/{id}-{slug}` | ✅ 完整 |
-| **WorkspaceManager** | createPane 时自动创建 worktree, closePane 时清理, restart 保留 worktree | ✅ 完整 |
-| **PtyManager** | worktree pane 使用 `worktreePath` 作为 cwd | ✅ 完整 |
-| **Per-pane GitService** | 每个 worktree pane 独立的 diff 监听 | ✅ 完整 |
-| **AgentsYamlWriter** | 输出 isolation/branch/worktree 路径 | ✅ 完整 |
-| **WS 协议** | `pane.diff` / `pane.diff.refresh` 事件 | ✅ 完整 |
-| **前端类型** | `IsolationMode`, PaneState 有 branch/worktreePath | ✅ 完整 |
-| **AddPaneDialog** | Shared/Worktree 切换按钮 | ✅ 完整 |
-| **AgentPane** | 显示 branch 名和 diff 数量 badge | ✅ 完整 |
-| **GitDiffPanel** | 支持 paneId 过滤，per-pane review tab | ✅ 完整 |
-| **Config 持久化** | `persistPaneConfig` 保存 isolation/worktreePath/branch | ✅ 完整 |
+| **创建** | AddPaneDialog 选 Worktree 模式 | ✅ |
+| **工作** | Agent 在隔离 worktree 目录自治工作 | ✅ |
+| **感知** | AgentPane header 显示 branch 名 + diff 数量 badge | ✅ |
+| **审查** | 点击 diff badge 打开 per-pane Review tab，查看 total diff vs base | ✅ |
+| **行级评论** | Review 面板中对 diff 行添加 comment，发送到 agent 终端 | ✅ |
+| **合并** | Review 面板顶栏 Merge 按钮 / AgentPane header Merge 图标 | ✅ |
+| **丢弃** | Review 面板顶栏 Discard 按钮（双击确认） | ✅ |
+| **关闭** | 关闭 pane 时保留 branch（可之后在其他地方 merge） | ✅ |
 
-## 核心问题：Restore 时 worktree 没有重建
+## 已实现能力
 
-**这是 worktree "无法使用" 的根本原因。**
+### 后端
 
-`WorkspaceManager.init()` 恢复 pane 时直接调用 `spawnPane()`，但：
+| 模块 | 能力 |
+|---|---|
+| `WorktreeManager.create()` | 创建 worktree + branch `nexus/{id}-{slug}` |
+| `WorktreeManager.merge()` | auto-commit 未提交的更改 → merge 到 base branch，冲突时自动 abort |
+| `WorktreeManager.discard()` | 删除 worktree 目录 + 删除 branch |
+| `WorktreeManager.remove()` | 删除 worktree 目录，保留 branch |
+| `WorkspaceManager.mergeWorktree()` | 校验 pane 类型后调 merge |
+| `WorkspaceManager.discardWorktree()` | 停 GitService → 调 discard → 清除 pane 的 worktree 状态 → 清空 diff |
+| `PtyManager` | worktree pane 使用 `worktreePath` 作为 cwd |
+| Per-pane `GitService` | 每个 worktree pane 独立的 diff 文件监听 |
+| `AgentsYamlWriter` | 输出 isolation/branch/worktree 路径供 agent 互感知 |
 
-1. **`shutdown()` 调用了 `worktreeManager.removeAll()`** — 服务关闭时所有 worktree 目录被删除
-2. **`init()` 里只调 `spawnPane()`，没有重建 worktree** — cwd 指向已删除的目录，spawn 必然失败
-3. **`init()` 没有启动 per-pane GitService** — worktree pane 的 diff 监听不会恢复
-4. **`WorktreeManager.create()` 没有检查已存在的 worktree** — 非 graceful shutdown 残留 worktree 会导致创建报错
+### WS 协议
 
-### 相关代码位置
+```typescript
+// Client → Server
+'pane.merge'          // { paneId } — 合并 worktree branch 到 base branch
+'pane.discard'        // { paneId } — 丢弃所有修改，删除 branch
+'pane.diff.refresh'   // { paneId } — 刷新 per-pane diff
 
-```
-WorkspaceManager.init()           → packages/server/src/workspace/WorkspaceManager.ts:70-104
-WorkspaceManager.shutdown()       → packages/server/src/workspace/WorkspaceManager.ts:431-439
-WorktreeManager.create()          → packages/server/src/git/WorktreeManager.ts
-```
-
-## 其他问题
-
-1. **关闭 pane 后 branch 残留** — `closePane` 调 `worktreeManager.remove()`（保留 branch），但用户没有任何 UI 入口查看/合并/删除这些残留 branch
-2. **没有 merge/PR 工作流** — worktree pane 的修改在独立 branch 上，但没有 merge 回主分支或创建 PR 的能力
-3. **config.yaml 存了 worktreePath 绝对路径** — 项目目录移动后路径失效
-
-## 修复方案：Restore 流程
-
-### 最小修复
-
-`init()` 恢复 worktree pane 时：
-
-```
-检查 paneConfig.isolation === 'worktree'
-  → 检查 worktreePath 目录是否存在
-    → 存在：直接使用（上次非 graceful shutdown 残留）
-    → 不存在：从已有 branch 重新 checkout worktree
-  → 将 entry 注册到 WorktreeManager 内部 Map
-  → 启动 per-pane GitService
-  → spawnPane()
+// Server → Client
+'pane.diff'           // { paneId, diffs } — per-pane diff 变更
+'pane.merge.result'   // { paneId, success, message } — merge/discard 结果
 ```
 
-### shutdown 策略调整
+### 前端
 
-考虑 `shutdown()` **不删除 worktree**（仅在用户显式 `closePane` 时删除），这样：
-- Restore 更轻量（直接复用已有目录）
-- 非 graceful shutdown 不会丢失工作
-- 代价是磁盘占用（每个 worktree ≈ 项目大小，不含 .git）
+| 组件 | 能力 |
+|---|---|
+| `AddPaneDialog` | Shared/Worktree 切换按钮 |
+| `AgentPane` header | branch 名 badge + diff 数量 + Merge 图标按钮 + merge 结果横幅 |
+| `GitDiffPanel` (worktree) | 顶栏显示 branch 名 + Merge 按钮 + Discard 按钮（双击确认）+ merge 结果横幅 |
+| `GitDiffPanel` (worktree) | 不显示 Staged 区域，不显示 Stage/Discard 文件级按钮 |
+| `workspaceStore` | `mergeResults` 状态 + `setMergeResult` / `clearMergeResult` |
+| `App.tsx` | 处理 `pane.merge.result` 事件，5 秒后自动清除 |
 
-## 完整用户路径设计
-
-### 理想流程
-
-```
-创建 → 工作 → 审查 → 合并/丢弃 → 清理
-```
-
-### 各阶段能力矩阵
-
-| 阶段 | 用户操作 | 现状 | 需要做的 |
-|---|---|---|---|
-| **创建** | AddPaneDialog 选 Worktree 模式 | ✅ 已有 | — |
-| **工作** | Agent 在隔离目录工作 | ✅ 已有 | — |
-| **感知** | 看到 branch 名、diff 数量 | ✅ 已有 | — |
-| **审查** | 点击 diff badge 打开 Review tab | ✅ 已有 | — |
-| **合并** | 将 worktree branch merge 回主分支 | ❌ 缺失 | 见下方设计 |
-| **丢弃** | 放弃修改，删除 branch | ❌ 缺失 | 见下方设计 |
-| **清理** | 关闭 pane 时选择保留/删除 branch | ❌ 缺失 | 见下方设计 |
-
-### 待设计：合并/丢弃工作流
-
-#### 方案 A：Nexus 内 git merge
-
-- AgentPane 操作菜单增加 "Merge to main" 按钮
-- 后端执行 `git merge nexus/{branch}` 到主分支
-- 冲突时展示冲突文件，用户手动解决或指派 Agent
-- 优点：闭环体验
-- 缺点：merge 冲突处理复杂
-
-#### 方案 B：创建 PR（推荐）
-
-- AgentPane 操作菜单增加 "Create PR" 按钮
-- 后端执行 `git push origin nexus/{branch}` + `gh pr create`
-- 优点：利用 GitHub 成熟的 review/merge 流程，实现简单
-- 缺点：依赖 GitHub CLI，本地项目不适用
-
-#### 方案 C：混合
-
-- 默认提供 "Merge to main"（本地快速合并）
-- 如果检测到 remote，额外提供 "Push & Create PR"
-
-### 待设计：关闭 pane 时的行为
-
-当前行为：关闭 pane 时保留 branch、删除 worktree 目录。
-
-建议改为：
+## Merge 流程细节
 
 ```
-关闭 worktree pane 时弹确认框：
-  ├── "保留 Branch" — 删除 worktree 目录，保留 branch（可以之后 merge）
-  ├── "合并并关闭" — merge 到主分支，删除 worktree + branch
-  └── "丢弃" — 删除 worktree + branch（不可恢复）
+用户点击 Merge
+  → 前端发送 { type: 'pane.merge', paneId }
+  → WorktreeManager.merge(paneId):
+      1. 检查 worktree 中是否有未提交的更改
+      2. 如有 → git add -A + auto-commit
+      3. 检查 branch 相对 base 是否有新 commits
+      4. 从主仓库执行 git merge branch
+      5. 成功 → 返回 commit 数量信息
+      6. 冲突 → git merge --abort + 返回错误信息
+  → 前端显示结果横幅（5 秒后消失）
+  → 刷新全局 git diff
 ```
 
-## 实施优先级建议
+## Discard 流程细节
 
-### P0：修复 Restore（让 worktree 基本可用）
+```
+用户点击 Discard（需二次确认）
+  → 前端发送 { type: 'pane.discard', paneId }
+  → WorkspaceManager.discardWorktree(paneId):
+      1. 停止 per-pane GitService
+      2. WorktreeManager.discard(): 删除 worktree 目录 + 删除 branch
+      3. 清除 pane 的 worktree 状态 (isolation → shared, branch → undefined)
+      4. 发送空 diffs 清空 UI
+  → 前端显示结果横幅
+  → 刷新全局 git diff
+```
 
-1. `init()` 增加 worktree 恢复逻辑
-2. `shutdown()` 改为不删除 worktree
-3. `WorktreeManager.create()` 增加幂等性检查
+## Restore（已实现）
 
-### P1：关闭时确认框
+### 问题
 
-4. 前端 closePane 增加 worktree 确认弹窗
-5. 后端增加 `closePane` 的 mode 参数（keep-branch / merge / discard）
+服务重启后 worktree pane 无法恢复。
 
-### P2：合并/PR 工作流
+### 修复
 
-6. AgentPane 操作菜单增加 merge/PR 操作
-7. 后端实现 merge 和 push+PR 逻辑
+三处改动：
+
+1. **`WorktreeManager.restore(paneId, branch, worktreePath)`**
+   - 检查 branch 是否存在（不存在 → 返回 false，跳过该 pane）
+   - 检查 worktree 目录是否存在 → 直接复用（非 graceful shutdown 残留）
+   - 目录不存在 → `git worktree prune` + 从已有 branch 重建
+   - 注册到内部 Map
+
+2. **`WorkspaceManager.init()` → `async init()`**
+   - 恢复 worktree pane 时先调 `worktreeManager.restore()`
+   - 成功后 `spawnPane()` + 启动 per-pane `GitService`
+   - 失败时跳过并清理 config
+
+3. **`WorkspaceManager.shutdown()`**
+   - 移除 `worktreeManager.removeAll()`
+   - 关闭时只停 PTY 和 GitService，**保留 worktree 目录**
+   - worktree 仅在用户显式 closePane / discard 时删除
+
+### Restore 流程
+
+```
+init() 遍历 config.yaml 中的 panes：
+  pane.isolation === 'worktree' ?
+    → worktreeManager.restore(id, branch, worktreePath)
+      → branch 不存在？跳过，failCount++
+      → worktreePath 目录存在？直接注册到 Map
+      → 目录不存在？git worktree add worktreePath branch
+    → spawnPane(paneConfig)
+    → startPaneGitService(id, worktreePath)
+  否则：
+    → spawnPane(paneConfig)  // 原有逻辑
+```

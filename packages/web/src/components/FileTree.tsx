@@ -1,5 +1,21 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Folder, FolderOpen, File, ChevronRight, ChevronDown } from 'lucide-react'
+import {
+  Folder,
+  FolderOpen,
+  File,
+  FileArchive,
+  FileAudio,
+  FileCode2,
+  FileCog,
+  FileImage,
+  FileJson,
+  FileSpreadsheet,
+  FileText,
+  FileVideo,
+  ChevronRight,
+  ChevronDown,
+  type LucideIcon,
+} from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { FileNode } from '@/types'
 
@@ -13,11 +29,53 @@ interface FileTreeNodeProps {
   activeFilePath: string | undefined
 }
 
+function shouldAutoExpand(node: FileNode) {
+  return node.type === 'directory' && !node.name.startsWith('.')
+}
+
+function getFileIcon(name: string): LucideIcon {
+  const lowerName = name.toLowerCase()
+  const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.') + 1) : ''
+
+  if (lowerName === 'package.json' || lowerName === 'tsconfig.json' || lowerName.endsWith('.config.js') || lowerName.endsWith('.config.ts')) {
+    return FileCog
+  }
+
+  if (
+    lowerName.startsWith('.env') ||
+    lowerName === '.gitignore' ||
+    lowerName === '.gitattributes' ||
+    lowerName === '.editorconfig' ||
+    lowerName.endsWith('.yml') ||
+    lowerName.endsWith('.yaml') ||
+    lowerName.endsWith('.toml') ||
+    lowerName === 'dockerfile'
+  ) {
+    return FileCog
+  }
+
+  if (ext === 'json') return FileJson
+  if (['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'php', 'c', 'cc', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bash', 'zsh'].includes(ext)) {
+    return FileCode2
+  }
+  if (['css', 'scss', 'sass', 'less', 'html', 'xml'].includes(ext)) return FileCode2
+  if (['md', 'mdx', 'txt', 'rst'].includes(ext) || lowerName === 'readme') return FileText
+  if (['csv', 'tsv', 'xls', 'xlsx'].includes(ext)) return FileSpreadsheet
+  if (ext === 'pdf') return FileText
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp', 'avif'].includes(ext)) return FileImage
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return FileVideo
+  if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return FileAudio
+  if (['zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', '7z', 'rar'].includes(ext)) return FileArchive
+
+  return File
+}
+
 function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths, activeFilePath }: FileTreeNodeProps) {
   const isExpanded = expanded.has(node.path)
   const isActive = activeFilePath === node.path
   const isOpen = openFilePaths.has(node.path)
   const isDir = node.type === 'directory'
+  const FileIcon = getFileIcon(node.name)
 
   const handleClick = () => {
     if (isDir) {
@@ -61,7 +119,7 @@ function FileTreeNode({ node, depth, expanded, onToggle, onSelect, openFilePaths
             <Folder className="icon-sm" style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
           )
         ) : (
-          <File className="icon-sm" style={{ color: isOpen ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
+          <FileIcon className="icon-sm" style={{ color: isOpen ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0 }} />
         )}
 
         <span>{node.name}</span>
@@ -94,11 +152,11 @@ export function FileTree() {
       initializedRef.current = true
       const initial = new Set<string>()
       for (const node of fileTree) {
-        if (node.type === 'directory') {
+        if (shouldAutoExpand(node)) {
           initial.add(node.path)
           if (node.children) {
             for (const child of node.children) {
-              if (child.type === 'directory') {
+              if (shouldAutoExpand(child)) {
                 initial.add(child.path)
               }
             }

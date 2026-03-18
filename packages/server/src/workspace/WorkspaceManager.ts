@@ -67,7 +67,7 @@ export class WorkspaceManager {
     this.worktreeManager = new WorktreeManager(configManager.getProjectDir())
   }
 
-  init(): void {
+  async init(): Promise<void> {
     const wsConfig = this.configManager.initWorkspace()
     this.wsName = wsConfig.name
     this.wsDescription = wsConfig.description || ''
@@ -89,8 +89,30 @@ export class WorkspaceManager {
       if (paneConfig.sessionId && paneConfig.agent !== '__shell__') {
         paneConfig.restore = 'resume'
       }
+
+      // Restore worktree if needed
+      if (paneConfig.isolation === 'worktree' && paneConfig.branch && paneConfig.worktreePath) {
+        try {
+          const restored = await this.worktreeManager.restore(paneConfig.id, paneConfig.branch, paneConfig.worktreePath)
+          if (!restored) {
+            console.warn(`Skipping worktree pane ${paneConfig.id} (${paneConfig.name}): branch no longer exists`)
+            failCount++
+            continue
+          }
+        } catch (err) {
+          console.warn(`Skipping worktree pane ${paneConfig.id} (${paneConfig.name}): restore failed:`, (err as Error).message)
+          failCount++
+          continue
+        }
+      }
+
       try {
         this.spawnPane(paneConfig)
+
+        // Start per-pane git service for worktree panes
+        if (paneConfig.isolation === 'worktree' && paneConfig.worktreePath) {
+          await this.startPaneGitService(paneConfig.id, paneConfig.worktreePath)
+        }
       } catch (err) {
         console.warn(`Skipping stale pane ${paneConfig.id} (${paneConfig.name}):`, (err as Error).message)
         failCount++
@@ -209,6 +231,38 @@ export class WorkspaceManager {
 
     this.spawnPane(config)
     this.updatePaneConfigSessionId(paneId, resolvedSessionId)
+  }
+
+  async mergeWorktree(paneId: string): Promise<{ success: boolean; message: string }> {
+    const pane = this.panes.get(paneId)
+    if (!pane || pane.isolation !== 'worktree') {
+      return { success: false, message: 'Pane is not a worktree pane' }
+    }
+    return this.worktreeManager.merge(paneId)
+  }
+
+  async discardWorktree(paneId: string): Promise<{ success: boolean; message: string }> {
+    const pane = this.panes.get(paneId)
+    if (!pane || pane.isolation !== 'worktree') {
+      return { success: false, message: 'Pane is not a worktree pane' }
+    }
+
+    // Stop per-pane git service
+    this.stopPaneGitService(paneId)
+
+    // Discard worktree and branch
+    const result = await this.worktreeManager.discard(paneId)
+
+    if (result.success) {
+      // Clear worktree info from pane state (pane stays open but no longer isolated)
+      pane.isolation = 'shared'
+      pane.worktreePath = undefined
+      pane.branch = undefined
+      // Emit empty diffs to clear the UI
+      this.emit('onPaneDiff', paneId, [])
+    }
+
+    return result
   }
 
   writeToPane(paneId: string, data: string): void {
@@ -430,11 +484,9 @@ export class WorkspaceManager {
 
   async shutdown(): Promise<void> {
     this.ptyManager.killAll()
-    // Close per-pane git services
+    // Close per-pane git services (worktree directories are preserved for restore)
     for (const [paneId] of this.perPaneGitServices) {
       this.stopPaneGitService(paneId)
     }
-    // Clean up worktrees
-    await this.worktreeManager.removeAll()
   }
 }

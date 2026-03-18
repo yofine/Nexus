@@ -26,7 +26,7 @@ export async function startServer(port: number, projectDir: string) {
   configManager.loadGlobalConfig()
 
   const workspaceManager = new WorkspaceManager(configManager)
-  workspaceManager.init()
+  await workspaceManager.init()
 
   // agents.yaml writer — updates on pane state changes
   const agentsWriter = new AgentsYamlWriter(projectDir)

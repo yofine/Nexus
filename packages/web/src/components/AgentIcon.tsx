@@ -48,13 +48,11 @@ export function AgentIcon({ agent, size = 16, className }: AgentIconProps) {
     )
   }
 
-  if (normalized === 'qwencode' || normalized === 'qwen') {
+  if (normalized === 'qodercli' || normalized === 'qoder') {
     return (
       <svg className={className} style={sizeStyle} viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="3" width="18" height="18" rx="4" stroke="#7C3AED" strokeWidth="1.5"/>
-        <path d="M8 12h8M12 8v8" stroke="#7C3AED" strokeWidth="1.5" strokeLinecap="round"/>
-        <circle cx="8" cy="8" r="1.2" fill="#7C3AED"/>
-        <circle cx="16" cy="16" r="1.2" fill="#7C3AED"/>
+        <rect x="4" y="4" width="16" height="16" rx="4" stroke="#0EA5E9" strokeWidth="1.5"/>
+        <path d="M12 8a4 4 0 1 0 2.8 6.85L18 18" stroke="#0EA5E9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )
   }
@@ -104,8 +102,8 @@ export function getAgentDisplayName(agent: string): string {
     'kimi-cli': 'Kimi Code',
     kimi: 'Kimi Code',
     kimicode: 'Kimi Code',
-    qwencode: 'Qwen Code',
-    qwen: 'Qwen Code',
+    qodercli: 'Qoder CLI',
+    qoder: 'Qoder CLI',
     openai: 'OpenAI',
     gemini: 'Gemini',
     aider: 'Aider',
@@ -123,8 +121,8 @@ export function getAgentColor(agent: string): string {
     opencode: '#58A6FF',
     'kimi-cli': '#6366F1',
     kimi: '#6366F1',
-    qwencode: '#7C3AED',
-    qwen: '#7C3AED',
+    qodercli: '#0EA5E9',
+    qoder: '#0EA5E9',
     openai: '#10A37F',
     gemini: '#8B5CF6',
     aider: '#22C55E',

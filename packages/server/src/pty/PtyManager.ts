@@ -168,10 +168,18 @@ export class PtyManager {
         // Buffer for scrollback replay
         entry.scrollback.push(cleanData)
         entry.scrollbackBytes += cleanData.length
-        // Trim if over budget
-        while (entry.scrollbackBytes > MAX_SCROLLBACK_BYTES && entry.scrollback.length > 1) {
-          const removed = entry.scrollback.shift()!
-          entry.scrollbackBytes -= removed.length
+        // Trim if over budget — batch splice instead of shift() loop to avoid O(n²)
+        if (entry.scrollbackBytes > MAX_SCROLLBACK_BYTES) {
+          let bytesToRemove = entry.scrollbackBytes - MAX_SCROLLBACK_BYTES
+          let removeCount = 0
+          while (removeCount < entry.scrollback.length - 1 && bytesToRemove > 0) {
+            bytesToRemove -= entry.scrollback[removeCount].length
+            entry.scrollbackBytes -= entry.scrollback[removeCount].length
+            removeCount++
+          }
+          if (removeCount > 0) {
+            entry.scrollback.splice(0, removeCount)
+          }
         }
 
         for (const cb of entry.onDataCallbacks) {

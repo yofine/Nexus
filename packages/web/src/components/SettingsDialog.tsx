@@ -58,7 +58,7 @@ const AGENT_DISPLAY: Record<string, { name: string; desc: string }> = {
   codex: { name: 'Codex', desc: 'OpenAI CLI coding agent' },
   opencode: { name: 'OpenCode', desc: 'Open-source AI coding agent' },
   'kimi-cli': { name: 'Kimi Code', desc: 'Moonshot AI coding assistant' },
-  qwencode: { name: 'Qwen Code', desc: 'Alibaba Qwen coding agent' },
+  qodercli: { name: 'Qoder CLI', desc: 'Qoder coding agent' },
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {

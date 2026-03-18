@@ -29,9 +29,34 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       statusline: true,
       env: {},
     },
+    codex: {
+      bin: 'codex',
+      continue_flag: '',
+      resume_flag: '',
+      yolo_flag: '',
+      statusline: false,
+      env: {},
+    },
     opencode: {
       bin: 'opencode',
       continue_flag: '--continue',
+      resume_flag: '',
+      yolo_flag: '--yolo',
+      statusline: false,
+      env: {},
+    },
+    'kimi-cli': {
+      bin: 'kimi',
+      continue_flag: '--continue',
+      resume_flag: '',
+      yolo_flag: '',
+      statusline: false,
+      env: {},
+    },
+    qodercli: {
+      bin: 'qodercli',
+      continue_flag: '-c',
+      resume_flag: '-r',
       yolo_flag: '--yolo',
       statusline: false,
       env: {},
@@ -149,7 +174,7 @@ export class ConfigManager {
       { key: 'codex', bin: 'codex', flag: '', statusline: false },
       { key: 'opencode', bin: 'opencode', flag: '--continue', statusline: false },
       { key: 'kimi-cli', bin: 'kimi', flag: '--continue', statusline: false },
-      { key: 'qwencode', bin: 'qwen-code', flag: '--continue', statusline: false },
+      { key: 'qodercli', bin: 'qodercli', flag: '-c', statusline: false },
     ]
 
     const results = await Promise.allSettled(
@@ -217,7 +242,7 @@ export class ConfigManager {
       { key: 'codex', bin: 'codex', installHint: 'npm install -g @openai/codex' },
       { key: 'opencode', bin: 'opencode', installHint: 'go install github.com/opencode-ai/opencode@latest' },
       { key: 'kimi-cli', bin: 'kimi', installHint: 'pip install kimi-cli' },
-      { key: 'qwencode', bin: 'qwen-code', installHint: 'pip install qwen-code' },
+      { key: 'qodercli', bin: 'qodercli', installHint: 'See https://docs.qoder.com/zh/cli/using-cli' },
     ]
 
     const checks = await Promise.allSettled(

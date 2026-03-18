@@ -45,6 +45,9 @@ interface WorkspaceStore {
   activities: ActivityEntry[]
   paneCurrentFile: Record<string, { file: string; action: FileAction }>
 
+  // Merge results (transient feedback)
+  mergeResults: Record<string, { success: boolean; message: string }>
+
   // Dependency graph
   depGraph: DepGraph | null
 
@@ -68,6 +71,8 @@ interface WorkspaceStore {
   setGitBranchInfo: (info: { branch: string; remote?: string; ahead: number; behind: number }) => void
   setPaneDiffs: (paneId: string, diffs: FileDiff[]) => void
   removePaneDiffs: (paneId: string) => void
+  setMergeResult: (paneId: string, result: { success: boolean; message: string }) => void
+  clearMergeResult: (paneId: string) => void
   setDiffViewPaneId: (paneId: string | null) => void
   setDepGraph: (graph: DepGraph) => void
   addActivity: (paneId: string, activity: FileActivity) => void
@@ -91,6 +96,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   gitStagedDiffs: [],
   gitBranchInfo: null,
   paneDiffs: {},
+  mergeResults: {},
   diffViewPaneId: null,
   activities: [],
   paneCurrentFile: {},
@@ -195,6 +201,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
         paneDiffs: rest,
         diffViewPaneId: state.diffViewPaneId === paneId ? null : state.diffViewPaneId,
       }
+    }),
+
+  setMergeResult: (paneId, result) =>
+    set((state) => ({
+      mergeResults: { ...state.mergeResults, [paneId]: result },
+    })),
+
+  clearMergeResult: (paneId) =>
+    set((state) => {
+      const { [paneId]: _, ...rest } = state.mergeResults
+      return { mergeResults: rest }
     }),
 
   setDiffViewPaneId: (diffViewPaneId) => set({ diffViewPaneId }),

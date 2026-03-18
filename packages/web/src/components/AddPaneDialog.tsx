@@ -3,7 +3,7 @@ import { GitBranch, Share2, Zap, History, Plus, Loader2, X, FolderOpen, MessageS
 import { AgentIcon, getAgentDisplayName } from './AgentIcon'
 import type { ClientEvent, AgentType, RestoreMode, IsolationMode, AgentAvailability, DiscoveredSession } from '@/types'
 
-const AGENT_TYPES: AgentType[] = ['claudecode', 'codex', 'opencode', 'kimi-cli', 'qwencode']
+const AGENT_TYPES: AgentType[] = ['claudecode', 'codex', 'opencode', 'kimi-cli', 'qodercli']
 
 function estimateTerminalDimensions(): { cols: number; rows: number } {
   const FONT_SIZE = 13

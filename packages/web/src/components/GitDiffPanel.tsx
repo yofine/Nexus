@@ -9,6 +9,7 @@ import {
   FileSymlink,
   ExternalLink,
   GitBranch,
+  GitMerge,
   Check,
   X,
   CheckCheck,
@@ -496,8 +497,11 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
   const [stagedCollapsed, setStagedCollapsed] = useState(false)
   const [unstagedCollapsed, setUnstagedCollapsed] = useState(false)
 
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+
   const isWorktree = !!paneId
   const pane = isWorktree ? panes.find((p) => p.id === paneId) : undefined
+  const mergeResult = useWorkspaceStore((s) => paneId ? s.mergeResults[paneId] : undefined)
 
   const unstagedDiffs = useMemo(() => {
     if (paneId && paneDiffs[paneId]) return paneDiffs[paneId]
@@ -557,6 +561,21 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
   const handlePush = useCallback(() => {
     send({ type: 'git.push' })
   }, [send])
+
+  const handleMerge = useCallback(() => {
+    if (paneId) send({ type: 'pane.merge', paneId })
+  }, [send, paneId])
+
+  const handleDiscard = useCallback(() => {
+    if (!paneId) return
+    if (!confirmDiscard) {
+      setConfirmDiscard(true)
+      setTimeout(() => setConfirmDiscard(false), 3000)
+      return
+    }
+    send({ type: 'pane.discard', paneId })
+    setConfirmDiscard(false)
+  }, [send, paneId, confirmDiscard])
 
   const totalChanges = unstagedDiffs.length + stagedDiffs.length
 
@@ -619,6 +638,50 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
         </span>
 
+        {/* Worktree actions: Merge + Discard */}
+        {isWorktree && totalChanges > 0 && (
+          <>
+            <button
+              onClick={handleMerge}
+              title="Merge into base branch"
+              className="pane-action-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 'var(--font-xs)',
+                color: 'var(--status-running)',
+                fontWeight: 600,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-overlay)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              <GitMerge size={13} />
+              Merge
+            </button>
+            <button
+              onClick={handleDiscard}
+              title={confirmDiscard ? 'Click again to confirm discard' : 'Discard all changes and delete branch'}
+              className="pane-action-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 'var(--font-xs)',
+                color: confirmDiscard ? '#fff' : 'var(--status-error)',
+                fontWeight: 600,
+                background: confirmDiscard ? 'var(--status-error)' : 'none',
+                borderRadius: 'var(--radius-sm)',
+              }}
+              onMouseEnter={(e) => { if (!confirmDiscard) e.currentTarget.style.background = 'var(--bg-overlay)' }}
+              onMouseLeave={(e) => { if (!confirmDiscard) e.currentTarget.style.background = 'none' }}
+            >
+              <Trash2 size={13} />
+              {confirmDiscard ? 'Confirm' : 'Discard'}
+            </button>
+          </>
+        )}
+
         {/* Push button */}
         {!isWorktree && gitBranchInfo && gitBranchInfo.ahead > 0 && (
           <button
@@ -642,6 +705,20 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
           <RefreshCw className="icon-sm" style={{ color: 'var(--text-muted)' }} />
         </button>
       </div>
+
+      {/* Merge result banner */}
+      {mergeResult && (
+        <div style={{
+          padding: '6px var(--space-lg)',
+          fontSize: 'var(--font-xs)',
+          fontFamily: 'var(--font-mono)',
+          background: mergeResult.success ? 'color-mix(in srgb, var(--status-running) 15%, transparent)' : 'color-mix(in srgb, var(--status-error) 15%, transparent)',
+          color: mergeResult.success ? 'var(--status-running)' : 'var(--status-error)',
+          borderBottom: '1px solid var(--border-subtle)',
+        }}>
+          {mergeResult.success ? '✓' : '✗'} {mergeResult.message}
+        </div>
+      )}
 
       {/* Scrollable content area */}
       <div style={{ flex: 1, overflow: 'auto' }}>

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  GitMerge,
   RotateCcw,
   X,
   Play,
@@ -38,6 +39,7 @@ const statusColors: Record<string, string> = {
 export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, onToggle, send }: AgentPaneProps) {
   const paneColor = getPaneColor(paneIndex)
   const paneDiffs = useWorkspaceStore((s) => s.paneDiffs[pane.id])
+  const mergeResult = useWorkspaceStore((s) => s.mergeResults[pane.id])
   const { openReviewTab } = useWorkspaceStore()
   const diffCount = paneDiffs?.length ?? 0
   const prevExpandedRef = useRef(isExpanded)
@@ -110,6 +112,11 @@ export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, 
     } else {
       send({ type: 'pane.restart', paneId: pane.id, mode: 'continue' })
     }
+  }
+
+  const handleMerge = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    send({ type: 'pane.merge', paneId: pane.id })
   }
 
   const hasSessionId = !!(pane.meta.sessionId || pane.sessionId)
@@ -221,6 +228,17 @@ export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, 
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-xs)', flexShrink: 0, alignItems: 'center' }}>
+            {/* Merge button — worktree panes with changes */}
+            {pane.isolation === 'worktree' && diffCount > 0 && (
+              <button
+                onClick={handleMerge}
+                title={`Merge ${pane.branch || 'branch'} into base branch`}
+                className="pane-action-btn"
+                style={{ color: 'var(--status-waiting)' }}
+              >
+                <GitMerge size={13} />
+              </button>
+            )}
             {/* Resume button — shown when pane is stopped/error or has a session ID */}
             {(isStopped || hasSessionId) && (
               <button
@@ -262,6 +280,20 @@ export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, 
           </div>
         )}
       </div>
+
+      {/* Merge result banner */}
+      {mergeResult && (
+        <div style={{
+          padding: '4px 12px',
+          fontSize: 'var(--font-xs)',
+          fontFamily: 'var(--font-mono)',
+          background: mergeResult.success ? 'color-mix(in srgb, var(--status-running) 15%, transparent)' : 'color-mix(in srgb, var(--status-error) 15%, transparent)',
+          color: mergeResult.success ? 'var(--status-running)' : 'var(--status-error)',
+          borderBottom: '1px solid var(--border-subtle)',
+        }}>
+          {mergeResult.success ? '✓' : '✗'} {mergeResult.message}
+        </div>
+      )}
 
       {/* Terminal body — always mounted to keep xterm instance alive */}
       <div style={isExpanded ? {

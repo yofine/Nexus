@@ -21,22 +21,27 @@ export function setupWsHandlers(
     state,
   })
 
-  // Replay terminal scrollback for each pane — chunk large scrollbacks
-  // to avoid blocking the event loop with a single huge JSON.stringify
+  // Replay terminal scrollback for each pane asynchronously.
+  // Uses setImmediate to yield between panes and between chunks,
+  // preventing event loop starvation with 10+ panes × 512KB scrollback.
   const SCROLLBACK_CHUNK_SIZE = 64 * 1024 // 64KB per message
-  for (const pane of state.panes) {
-    const scrollback = workspaceManager.getScrollback(pane.id)
-    if (scrollback) {
+  const replayScrollback = async () => {
+    for (const pane of state.panes) {
+      const scrollback = workspaceManager.getScrollback(pane.id)
+      if (!scrollback) continue
       if (scrollback.length <= SCROLLBACK_CHUNK_SIZE) {
         send({ type: 'terminal.output', paneId: pane.id, data: scrollback })
       } else {
-        // Send in chunks to avoid blocking
         for (let i = 0; i < scrollback.length; i += SCROLLBACK_CHUNK_SIZE) {
+          if (socket.readyState !== socket.OPEN) return // bail if disconnected
           send({ type: 'terminal.output', paneId: pane.id, data: scrollback.slice(i, i + SCROLLBACK_CHUNK_SIZE) })
+          // Yield to event loop between chunks
+          await new Promise<void>((resolve) => setImmediate(resolve))
         }
       }
     }
   }
+  replayScrollback().catch(() => { /* socket may have closed */ })
 
   // Send initial per-pane diffs for worktree panes
   const paneDiffs = workspaceManager.getPaneDiffs()
@@ -194,6 +199,29 @@ export function setupWsHandlers(
               send({ type: 'git.result', action: 'push', success: false, message: String(err) })
             })
         }
+        break
+
+      case 'pane.merge':
+        workspaceManager.mergeWorktree(event.paneId)
+          .then((result) => {
+            send({ type: 'pane.merge.result', paneId: event.paneId, ...result })
+            // Refresh global git diff after merge
+            gitService?.refresh()
+          })
+          .catch((err) => {
+            send({ type: 'pane.merge.result', paneId: event.paneId, success: false, message: String(err) })
+          })
+        break
+
+      case 'pane.discard':
+        workspaceManager.discardWorktree(event.paneId)
+          .then((result) => {
+            send({ type: 'pane.merge.result', paneId: event.paneId, ...result })
+            gitService?.refresh()
+          })
+          .catch((err) => {
+            send({ type: 'pane.merge.result', paneId: event.paneId, success: false, message: String(err) })
+          })
         break
 
       case 'pane.diff.refresh':

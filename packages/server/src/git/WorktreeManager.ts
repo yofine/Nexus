@@ -50,6 +50,44 @@ export class WorktreeManager {
   }
 
   /**
+   * Restore a worktree from a previous session.
+   * If the worktree directory still exists, re-register it.
+   * If not, recreate it from the existing branch.
+   * Returns false if the branch no longer exists (stale config).
+   */
+  async restore(paneId: string, branch: string, worktreePath: string): Promise<boolean> {
+    // Determine base branch
+    const baseBranch = await this.getCurrentBranch()
+
+    // Check if branch exists
+    try {
+      await this.git.raw(['rev-parse', '--verify', branch])
+    } catch {
+      // Branch doesn't exist — stale config, can't restore
+      return false
+    }
+
+    if (fs.existsSync(worktreePath)) {
+      // Worktree directory still exists (non-graceful shutdown) — just re-register
+      this.worktrees.set(paneId, { path: worktreePath, branch, baseBranch })
+      return true
+    }
+
+    // Recreate worktree from existing branch
+    try {
+      // Clean up any stale git worktree metadata
+      await this.git.raw(['worktree', 'prune']).catch(() => {})
+      fs.mkdirSync(path.dirname(worktreePath), { recursive: true })
+      await this.git.raw(['worktree', 'add', worktreePath, branch])
+      this.worktrees.set(paneId, { path: worktreePath, branch, baseBranch })
+      return true
+    } catch (err) {
+      console.warn(`[WorktreeManager] Failed to restore worktree for ${paneId}:`, (err as Error).message)
+      return false
+    }
+  }
+
+  /**
    * Remove a worktree. Branch is kept for later merge/PR.
    */
   async remove(paneId: string): Promise<void> {
@@ -150,6 +188,79 @@ export class WorktreeManager {
     }
 
     return diffs
+  }
+
+  /**
+   * Merge the worktree branch into the base branch (e.g. main).
+   * First commits any uncommitted changes in the worktree, then merges.
+   */
+  async merge(paneId: string): Promise<{ success: boolean; message: string }> {
+    const entry = this.worktrees.get(paneId)
+    if (!entry) {
+      return { success: false, message: 'Worktree not found for this pane' }
+    }
+
+    const wtGit = simpleGit(entry.path)
+
+    try {
+      // Auto-commit any uncommitted changes in the worktree
+      const status = await wtGit.status()
+      const hasChanges = status.modified.length > 0 || status.created.length > 0
+        || status.deleted.length > 0 || status.staged.length > 0
+        || status.not_added.length > 0
+
+      if (hasChanges) {
+        await wtGit.add('-A')
+        await wtGit.commit(`nexus: auto-commit before merge (${entry.branch})`)
+      }
+
+      // Check if there are any commits to merge
+      const log = await wtGit.log([`${entry.baseBranch}..${entry.branch}`])
+      if (log.total === 0) {
+        return { success: false, message: 'No changes to merge' }
+      }
+
+      // Merge from main repo (not worktree) to avoid "can't merge into checked-out branch" issue
+      await this.git.merge([entry.branch])
+
+      return {
+        success: true,
+        message: `Merged ${log.total} commit${log.total !== 1 ? 's' : ''} from ${entry.branch} into ${entry.baseBranch}`,
+      }
+    } catch (err) {
+      // If merge failed due to conflict, abort it
+      try {
+        await this.git.merge(['--abort'])
+      } catch {
+        // ignore abort failure
+      }
+      return {
+        success: false,
+        message: `Merge conflict: ${(err as Error).message}`,
+      }
+    }
+  }
+
+  /**
+   * Discard all changes: remove worktree and delete the branch.
+   */
+  async discard(paneId: string): Promise<{ success: boolean; message: string }> {
+    const entry = this.worktrees.get(paneId)
+    if (!entry) {
+      return { success: false, message: 'Worktree not found for this pane' }
+    }
+
+    const branch = entry.branch
+    await this.forceRemoveWorktree(entry.path)
+
+    try {
+      await this.git.raw(['branch', '-D', branch])
+    } catch {
+      // Branch may not exist
+    }
+
+    this.worktrees.delete(paneId)
+    return { success: true, message: `Discarded branch ${branch}` }
   }
 
   getWorktreePath(paneId: string): string | undefined {

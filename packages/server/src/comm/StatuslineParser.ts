@@ -28,6 +28,9 @@ const KNOWN_FIELDS: Record<string, string> = {
 // Minimum number of known fields required to classify as statusline
 const MIN_KNOWN_FIELDS = 2
 
+// Max buffer size — if a line exceeds this without a newline, discard buffer
+const MAX_BUFFER_SIZE = 64 * 1024 // 64KB
+
 export class StatuslineParser {
   private buffer = ''
 
@@ -43,6 +46,10 @@ export class StatuslineParser {
     // Buffer it but pass through immediately.
     if (!data.includes('\n')) {
       this.buffer += data
+      // Prevent unbounded buffer growth (e.g., binary output without newlines)
+      if (this.buffer.length > MAX_BUFFER_SIZE) {
+        this.buffer = ''
+      }
       return { cleanData: data, meta: null }
     }
 

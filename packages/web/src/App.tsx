@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
-import { writeToTerminal } from '@/stores/terminalRegistry'
+import { writeToTerminal, clearAllHistories } from '@/stores/terminalRegistry'
 import { Layout } from '@/components/Layout'
 import type { ServerEvent } from '@/types'
 
@@ -19,12 +19,17 @@ export function App() {
     setPaneDiffs,
     addActivity,
     addFileActivity,
+    setMergeResult,
+    clearMergeResult,
   } = useWorkspaceStore()
 
   const handleMessage = useCallback(
     (event: ServerEvent) => {
       switch (event.type) {
         case 'workspace.state':
+          // Clear client-side history before server replays scrollback,
+          // preventing duplicate output on WebSocket reconnect
+          clearAllHistories()
           setWorkspace(
             event.state.name,
             event.state.description || '',
@@ -84,9 +89,15 @@ export function App() {
         case 'file.activity':
           addFileActivity(event.activity)
           break
+
+        case 'pane.merge.result':
+          setMergeResult(event.paneId, { success: event.success, message: event.message })
+          // Auto-clear after 5s
+          setTimeout(() => clearMergeResult(event.paneId), 5000)
+          break
       }
     },
-    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitAllDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity],
+    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitAllDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity, setMergeResult, clearMergeResult],
   )
 
   const { send, status } = useWebSocket({ onMessage: handleMessage })
