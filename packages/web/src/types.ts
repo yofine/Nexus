@@ -4,6 +4,7 @@ export type PaneStatus = 'running' | 'waiting' | 'idle' | 'stopped' | 'error'
 export type RestoreMode = 'continue' | 'restart' | 'manual' | 'resume'
 export type AgentType = 'claudecode' | 'codex' | 'opencode' | 'kimi-cli' | 'qodercli' | '__shell__'
 export type IsolationMode = 'shared' | 'worktree'
+export type AgentTransport = 'pty' | 'acp'
 
 export interface PaneMeta {
   model?: string
@@ -34,6 +35,7 @@ export interface PaneState {
   branch?: string
   worktreePath?: string
   sessionId?: string
+  runtime: AgentTransport
   status: PaneStatus
   pid?: number
   meta: PaneMeta
@@ -53,6 +55,7 @@ export interface WorkspaceState {
 export type ClientEvent =
   | { type: 'terminal.input'; paneId: string; data: string }
   | { type: 'terminal.resize'; paneId: string; cols: number; rows: number }
+  | { type: 'conversation.send'; paneId: string; text: string }
   | { type: 'pane.create'; config: PaneCreateConfig }
   | { type: 'pane.close'; paneId: string }
   | { type: 'pane.restart'; paneId: string; mode: RestoreMode; sessionId?: string }
@@ -77,6 +80,7 @@ export type ClientEvent =
 // Server → Client
 export type ServerEvent =
   | { type: 'terminal.output'; paneId: string; data: string }
+  | { type: 'conversation.event'; paneId: string; event: ConversationEvent }
   | { type: 'pane.status'; paneId: string; status: PaneStatus }
   | { type: 'pane.meta'; paneId: string; meta: PaneMeta }
   | { type: 'pane.added'; pane: PaneState }
@@ -106,6 +110,26 @@ export interface PaneCreateConfig {
   cols?: number
   rows?: number
 }
+
+export type ConversationEvent =
+  | {
+    type: 'message'
+    messageId: string
+    role: 'user' | 'assistant'
+    text: string
+    append?: boolean
+  }
+  | {
+    type: 'tool'
+    toolCallId: string
+    title: string
+    status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+    text?: string
+  }
+  | {
+    type: 'status'
+    status: PaneStatus
+  }
 
 export interface DiscoveredSession {
   sessionId: string
@@ -196,6 +220,7 @@ export interface AgentDefinition {
   resume_flag?: string
   yolo_flag?: string
   statusline: boolean
+  transport?: AgentTransport
   env?: Record<string, string>
 }
 

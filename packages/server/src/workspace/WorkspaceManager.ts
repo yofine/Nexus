@@ -1,4 +1,5 @@
 import type {
+  ConversationEvent,
   PaneConfig,
   PaneState,
   PaneCreateConfig,
@@ -13,6 +14,7 @@ import type {
 } from '../types.ts'
 import type { GitDiffResult } from '../git/GitService.ts'
 import { PtyManager } from '../pty/PtyManager.ts'
+import { AcpRuntime } from '../runtime/AcpRuntime.ts'
 import { ConfigManager } from './ConfigManager.ts'
 import { WorktreeManager } from '../git/WorktreeManager.ts'
 import { GitService } from '../git/GitService.ts'
@@ -26,6 +28,7 @@ function nextPaneId(): string {
 export interface EventHandlers {
   onPaneAdded?: (pane: PaneState) => void
   onPaneRemoved?: (paneId: string) => void
+  onConversationEvent?: (paneId: string, event: ConversationEvent) => void
   onPaneStatus?: (paneId: string, status: PaneStatus) => void
   onPaneMeta?: (paneId: string, meta: PaneMeta) => void
   onTerminalData?: (paneId: string, data: string) => void
@@ -41,16 +44,21 @@ type ListenerKey = keyof EventHandlers
 export class WorkspaceManager {
   private panes = new Map<string, PaneState>()
   private ptyManager: PtyManager
+  private acpRuntime: AcpRuntime
   private configManager: ConfigManager
   private worktreeManager: WorktreeManager
   private perPaneGitServices = new Map<string, GitService>()
   private wsName = ''
   private wsDescription = ''
 
+  // Serialize config writes to prevent race conditions when closing multiple panes
+  private configWriteLock: Promise<void> = Promise.resolve()
+
   // Multi-client event listener sets
   private listeners: { [K in ListenerKey]: Set<NonNullable<EventHandlers[K]>> } = {
     onPaneAdded: new Set(),
     onPaneRemoved: new Set(),
+    onConversationEvent: new Set(),
     onPaneStatus: new Set(),
     onPaneMeta: new Set(),
     onTerminalData: new Set(),
@@ -64,6 +72,7 @@ export class WorkspaceManager {
   constructor(configManager: ConfigManager) {
     this.configManager = configManager
     this.ptyManager = new PtyManager(configManager)
+    this.acpRuntime = new AcpRuntime(configManager)
     this.worktreeManager = new WorktreeManager(configManager.getProjectDir())
   }
 
@@ -191,7 +200,11 @@ export class WorkspaceManager {
 
   async closePane(paneId: string): Promise<void> {
     const pane = this.panes.get(paneId)
-    this.ptyManager.kill(paneId)
+    if (pane?.runtime === 'acp') {
+      this.acpRuntime.kill(paneId)
+    } else {
+      this.ptyManager.kill(paneId)
+    }
 
     // Clean up worktree resources
     if (pane?.isolation === 'worktree') {
@@ -208,7 +221,11 @@ export class WorkspaceManager {
     const existingState = this.panes.get(paneId)
     if (!existingState) return
 
-    this.ptyManager.kill(paneId)
+    if (existingState.runtime === 'acp') {
+      this.acpRuntime.kill(paneId)
+    } else {
+      this.ptyManager.kill(paneId)
+    }
 
     // For resume mode, use the provided sessionId or fall back to the last known one
     const resolvedSessionId = mode === 'resume'
@@ -266,15 +283,41 @@ export class WorkspaceManager {
   }
 
   writeToPane(paneId: string, data: string): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) return
+    if (pane.runtime === 'acp') {
+      this.acpRuntime.write(paneId, data)
+      return
+    }
     this.ptyManager.write(paneId, data)
   }
 
+  sendConversationToPane(paneId: string, text: string): Promise<void> {
+    const pane = this.panes.get(paneId)
+    if (!pane) return Promise.resolve()
+    if (pane.runtime === 'acp') {
+      return this.acpRuntime.sendPrompt(paneId, text)
+    }
+    this.ptyManager.write(paneId, text + '\r')
+    return Promise.resolve()
+  }
+
   resizePane(paneId: string, cols: number, rows: number): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) return
+    if (pane.runtime === 'acp') {
+      this.acpRuntime.resize(paneId, cols, rows)
+      return
+    }
     this.ptyManager.resize(paneId, cols, rows)
   }
 
   getScrollback(paneId: string): string {
-    return this.ptyManager.getScrollback(paneId)
+    const pane = this.panes.get(paneId)
+    if (!pane) return ''
+    return pane.runtime === 'acp'
+      ? this.acpRuntime.getScrollback(paneId)
+      : this.ptyManager.getScrollback(paneId)
   }
 
   // ─── Event Registration (multi-client safe) ────────────────
@@ -343,7 +386,10 @@ export class WorkspaceManager {
   }
 
   private spawnPane(config: PaneConfig, cols?: number, rows?: number): PaneState {
-    const pid = this.ptyManager.spawn(config.id, config, cols || 80, rows || 24)
+    const runtime = this.resolveRuntime(config.agent)
+    const pid = runtime === 'acp'
+      ? this.acpRuntime.spawn(config.id, config)
+      : this.ptyManager.spawn(config.id, config, cols || 80, rows || 24)
 
     const pane: PaneState = {
       id: config.id,
@@ -357,6 +403,7 @@ export class WorkspaceManager {
       branch: config.branch,
       worktreePath: config.worktreePath,
       sessionId: config.sessionId,
+      runtime,
       status: 'running',
       pid,
       meta: {},
@@ -366,12 +413,13 @@ export class WorkspaceManager {
     this.panes.set(config.id, pane)
     this.emit('onPaneAdded', pane)
 
-    // Wire up PTY events
-    this.ptyManager.onData(config.id, (data) => {
+    const runtimeAdapter = runtime === 'acp' ? this.acpRuntime : this.ptyManager
+
+    runtimeAdapter.onData(config.id, (data) => {
       this.emit('onTerminalData', config.id, data)
     })
 
-    this.ptyManager.onStatus(config.id, (status) => {
+    runtimeAdapter.onStatus(config.id, (status) => {
       const p = this.panes.get(config.id)
       if (p) {
         p.status = status
@@ -379,7 +427,7 @@ export class WorkspaceManager {
       }
     })
 
-    this.ptyManager.onMeta(config.id, (meta) => {
+    runtimeAdapter.onMeta(config.id, (meta) => {
       const p = this.panes.get(config.id)
       if (p) {
         p.meta = meta
@@ -392,11 +440,23 @@ export class WorkspaceManager {
       }
     })
 
-    this.ptyManager.onActivity(config.id, (activity) => {
+    runtimeAdapter.onActivity(config.id, (activity) => {
       this.emit('onPaneActivity', config.id, activity)
     })
 
+    if (runtime === 'acp') {
+      this.acpRuntime.onConversation(config.id, (event) => {
+        this.emit('onConversationEvent', config.id, event)
+      })
+    }
+
     return pane
+  }
+
+  private resolveRuntime(agentType: PaneState['agent']): PaneState['runtime'] {
+    if (agentType === '__shell__') return 'pty'
+    const def = this.configManager.getAgentDefinition(agentType)
+    return def?.transport || 'pty'
   }
 
   private async startPaneGitService(paneId: string, worktreePath: string): Promise<void> {
@@ -419,22 +479,26 @@ export class WorkspaceManager {
   }
 
   private persistPaneConfig(config: PaneConfig): void {
-    const wsConfig = this.configManager.loadWorkspaceConfig()
-    if (wsConfig) {
-      wsConfig.panes.push(config)
-      this.configManager.saveWorkspaceConfig(wsConfig)
-    }
+    this.serializedConfigWrite(() => {
+      const wsConfig = this.configManager.loadWorkspaceConfig()
+      if (wsConfig) {
+        wsConfig.panes.push(config)
+        this.configManager.saveWorkspaceConfig(wsConfig)
+      }
+    })
   }
 
   private updatePaneConfigSessionId(paneId: string, sessionId?: string): void {
-    const wsConfig = this.configManager.loadWorkspaceConfig()
-    if (wsConfig) {
-      const paneConfig = wsConfig.panes.find((p) => p.id === paneId)
-      if (paneConfig) {
-        paneConfig.sessionId = sessionId
-        this.configManager.saveWorkspaceConfig(wsConfig)
+    this.serializedConfigWrite(() => {
+      const wsConfig = this.configManager.loadWorkspaceConfig()
+      if (wsConfig) {
+        const paneConfig = wsConfig.panes.find((p) => p.id === paneId)
+        if (paneConfig) {
+          paneConfig.sessionId = sessionId
+          this.configManager.saveWorkspaceConfig(wsConfig)
+        }
       }
-    }
+    })
   }
 
   getSessionList(paneId?: string): SessionInfo[] {
@@ -475,15 +539,32 @@ export class WorkspaceManager {
   }
 
   private removePaneFromConfig(paneId: string): void {
-    const wsConfig = this.configManager.loadWorkspaceConfig()
-    if (wsConfig) {
-      wsConfig.panes = wsConfig.panes.filter((p) => p.id !== paneId)
-      this.configManager.saveWorkspaceConfig(wsConfig)
-    }
+    this.serializedConfigWrite(() => {
+      const wsConfig = this.configManager.loadWorkspaceConfig()
+      if (wsConfig) {
+        wsConfig.panes = wsConfig.panes.filter((p) => p.id !== paneId)
+        this.configManager.saveWorkspaceConfig(wsConfig)
+      }
+    })
+  }
+
+  /**
+   * Serialize config file writes to prevent race conditions
+   * when multiple panes are created/closed simultaneously.
+   */
+  private serializedConfigWrite(fn: () => void): void {
+    this.configWriteLock = this.configWriteLock.then(() => {
+      try {
+        fn()
+      } catch (err) {
+        console.error('[WorkspaceManager] Config write failed:', err)
+      }
+    })
   }
 
   async shutdown(): Promise<void> {
     this.ptyManager.killAll()
+    this.acpRuntime.killAll()
     // Close per-pane git services (worktree directories are preserved for restore)
     for (const [paneId] of this.perPaneGitServices) {
       this.stopPaneGitService(paneId)

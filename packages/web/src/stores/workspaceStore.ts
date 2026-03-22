@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, IsolationMode, FileActivity, FileAction, DepGraph } from '@/types'
+import type { ConversationEvent, PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, FileActivity, FileAction, DepGraph } from '@/types'
 
 export interface EditorTab {
   id: string
@@ -47,6 +47,7 @@ interface WorkspaceStore {
 
   // Merge results (transient feedback)
   mergeResults: Record<string, { success: boolean; message: string }>
+  conversationByPane: Record<string, ConversationEvent[]>
 
   // Dependency graph
   depGraph: DepGraph | null
@@ -73,6 +74,7 @@ interface WorkspaceStore {
   removePaneDiffs: (paneId: string) => void
   setMergeResult: (paneId: string, result: { success: boolean; message: string }) => void
   clearMergeResult: (paneId: string) => void
+  applyConversationEvent: (paneId: string, event: ConversationEvent) => void
   setDiffViewPaneId: (paneId: string | null) => void
   setDepGraph: (graph: DepGraph) => void
   addActivity: (paneId: string, activity: FileActivity) => void
@@ -97,6 +99,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   gitBranchInfo: null,
   paneDiffs: {},
   mergeResults: {},
+  conversationByPane: {},
   diffViewPaneId: null,
   activities: [],
   paneCurrentFile: {},
@@ -110,11 +113,16 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   setWorkspace: (name, description, projectDir, panes) =>
     set((state) => {
       const visible = panes.filter((p) => p.agent !== '__shell__')
+      const conversationByPane = { ...state.conversationByPane }
+      for (const pane of visible) {
+        conversationByPane[pane.id] = conversationByPane[pane.id] || []
+      }
       return {
         name,
         description,
         projectDir,
         panes: visible,
+        conversationByPane,
         activePaneId: state.activePaneId || (visible.length > 0 ? visible[0].id : null),
       }
     }),
@@ -126,6 +134,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       if (pane.agent === '__shell__') return state
       return {
         panes: [...state.panes, pane],
+        conversationByPane: {
+          ...state.conversationByPane,
+          [pane.id]: state.conversationByPane[pane.id] || [],
+        },
         activePaneId: pane.id,
       }
     }),
@@ -133,6 +145,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   removePane: (paneId) =>
     set((state) => {
       const { [paneId]: _, ...restPaneDiffs } = state.paneDiffs
+      const { [paneId]: __, ...restConversations } = state.conversationByPane
       const reviewTabId = `review:${paneId}`
       const nextTabs = state.tabs.filter((t) => t.id !== reviewTabId)
       let nextActiveTab = state.activeTabId
@@ -145,6 +158,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
           ? (state.panes.find((p) => p.id !== paneId)?.id ?? null)
           : state.activePaneId,
         paneDiffs: restPaneDiffs,
+        conversationByPane: restConversations,
         diffViewPaneId: state.diffViewPaneId === paneId ? null : state.diffViewPaneId,
         tabs: nextTabs,
         activeTabId: nextActiveTab,
@@ -212,6 +226,33 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     set((state) => {
       const { [paneId]: _, ...rest } = state.mergeResults
       return { mergeResults: rest }
+    }),
+
+  applyConversationEvent: (paneId, event) =>
+    set((state) => {
+      const current = state.conversationByPane[paneId] || []
+
+      if (event.type === 'message' && event.append && current.length > 0) {
+        const last = current[current.length - 1]
+        if (last?.type === 'message' && last.role === event.role) {
+          const next = current.slice()
+          next[next.length - 1] = {
+            ...last,
+            messageId: event.messageId || last.messageId,
+            text: last.text + event.text,
+          }
+          return {
+            conversationByPane: { ...state.conversationByPane, [paneId]: next },
+          }
+        }
+      }
+
+      return {
+        conversationByPane: {
+          ...state.conversationByPane,
+          [paneId]: [...current, event],
+        },
+      }
     }),
 
   setDiffViewPaneId: (diffViewPaneId) => set({ diffViewPaneId }),

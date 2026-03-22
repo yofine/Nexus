@@ -1,33 +1,34 @@
-# Review 面板重设计
+# Review Tab 增强设计
 
-> 本文档预留，用于记录 Review 面板（原 EditorTabs 中的 review tab + 活动面板中的 Review Priority 视图）的整体重设计。
+> 本文档记录 Review Tab（`GitDiffPanel.tsx`）的未来增强方向。
+>
+> 原活动面板中的 "Review Priority" 视图（Heatmap）已移除，其职责归入 Review Tab。
 
 ## 背景
 
-当前有两个 review 相关的入口：
-1. **活动面板 → Review Priority 视图**（原 Heatmap）— 按优先级排列需要 review 的文件
-2. **EditorTabs → Review tab** — 点击文件后查看具体 diff
+Review Tab 当前功能：
+- **Workspace Review**：staged/unstaged diff 浏览、stage/unstage/discard 操作、commit/push
+- **Worktree Pane Review**：per-pane diff 浏览、merge/discard
+- **行级 Comment**：hover 行号出现 "+" 按钮，写评论后发送到目标 Agent 终端
+- **Inline Diff**：hunk 展开/折叠，增删行着色
 
-活动面板中的 Review Priority 和 EditorTabs 中的 Review 功能存在天然的上下游关系：
-- Review Priority 帮你决定"先看哪个文件"
-- EditorTabs Review 帮你"看具体改了什么"
+## 待增强
 
-## 待设计
+### 1. Agent 归属标注
+- 在 diff 文件列表中，用 pane 颜色标识每个文件是哪个 Agent 修改的
+- 多 Agent 交叉修改的文件显示冲突标记
 
-### 需要统一考虑的问题
+### 2. Review 优先级排序
+- 文件列表支持按变更量排序（当前按 git 默认顺序）
+- 多 Agent 交叉修改的文件自动置顶
+- 入口文件、被大量 import 的文件（可从 depGraph 获取）标注更高优先级
 
-- Review Priority 视图是否应该直接内嵌 diff 预览，而非跳转到 EditorTabs？
-- Diff Summary（按目录结构组织的变更全貌）放在哪里？作为 Review Priority 的另一种排列方式？
-- 多 Agent 的变更如何在 diff 中标注是谁改的？（git blame 级别 or agent 颜色标注）
-- 已 review / 未 review 状态追踪
-- review 批注功能（评论 → 发送回 Agent）
+### 3. Review 状态追踪
+- 已 review / 未 review 标记（前端 state，不持久化）
+- Review 进度指示（已看 N / 共 M 文件）
 
-### 信息整合
-
-Review Priority 视图可展示的信息（来自多个数据源）：
-- 变更行数（git diff）
-- 变更文件归属（哪个 Agent 改的，pane 颜色标识）
-- 冲突标记（来自 Conflicts 面板的数据）
-- 文件角色/重要性（入口文件、被大量 import 的文件优先级应更高）
+### 4. Comment 增强
+- 评论历史可回溯（当前发送后即消失）
+- Comment 区域显示 Agent 对评论的响应
 
 *具体设计待展开*

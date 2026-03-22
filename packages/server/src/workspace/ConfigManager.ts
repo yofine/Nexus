@@ -27,6 +27,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       resume_flag: '--resume',
       yolo_flag: '--dangerously-skip-permissions',
       statusline: true,
+      transport: 'pty',
       env: {},
     },
     codex: {
@@ -35,6 +36,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       resume_flag: '',
       yolo_flag: '',
       statusline: false,
+      transport: 'pty',
       env: {},
     },
     opencode: {
@@ -43,6 +45,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       resume_flag: '',
       yolo_flag: '--yolo',
       statusline: false,
+      transport: 'acp',
       env: {},
     },
     'kimi-cli': {
@@ -51,6 +54,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       resume_flag: '',
       yolo_flag: '',
       statusline: false,
+      transport: 'pty',
       env: {},
     },
     qodercli: {
@@ -59,6 +63,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
       resume_flag: '-r',
       yolo_flag: '--yolo',
       statusline: false,
+      transport: 'pty',
       env: {},
     },
   },
@@ -169,12 +174,12 @@ export class ConfigManager {
   private async detectAgentsAsync(): Promise<Record<string, AgentDefinition>> {
     const agents: Record<string, AgentDefinition> = {}
 
-    const agentBins: Array<{ key: string; bin: string; flag: string; statusline: boolean }> = [
-      { key: 'claudecode', bin: 'claude', flag: '--continue', statusline: true },
-      { key: 'codex', bin: 'codex', flag: '', statusline: false },
-      { key: 'opencode', bin: 'opencode', flag: '--continue', statusline: false },
-      { key: 'kimi-cli', bin: 'kimi', flag: '--continue', statusline: false },
-      { key: 'qodercli', bin: 'qodercli', flag: '-c', statusline: false },
+    const agentBins: Array<{ key: string; bin: string; flag: string; statusline: boolean; transport: 'pty' | 'acp' }> = [
+      { key: 'claudecode', bin: 'claude', flag: '--continue', statusline: true, transport: 'pty' },
+      { key: 'codex', bin: 'codex', flag: '', statusline: false, transport: 'pty' },
+      { key: 'opencode', bin: 'opencode', flag: '--continue', statusline: false, transport: 'acp' },
+      { key: 'kimi-cli', bin: 'kimi', flag: '--continue', statusline: false, transport: 'pty' },
+      { key: 'qodercli', bin: 'qodercli', flag: '-c', statusline: false, transport: 'pty' },
     ]
 
     const results = await Promise.allSettled(
@@ -191,6 +196,7 @@ export class ConfigManager {
           bin: agent.bin,
           continue_flag: agent.flag,
           statusline: agent.statusline,
+          transport: agent.transport,
           env: {},
         }
       }

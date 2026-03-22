@@ -24,7 +24,7 @@ export function setupWsHandlers(
   // Replay terminal scrollback for each pane asynchronously.
   // Uses setImmediate to yield between panes and between chunks,
   // preventing event loop starvation with 10+ panes × 512KB scrollback.
-  const SCROLLBACK_CHUNK_SIZE = 64 * 1024 // 64KB per message
+  const SCROLLBACK_CHUNK_SIZE = 512 * 1024 // 512KB per message — matches server-side scrollback limit
   const replayScrollback = async () => {
     for (const pane of state.panes) {
       const scrollback = workspaceManager.getScrollback(pane.id)
@@ -60,6 +60,9 @@ export function setupWsHandlers(
   const cleanup = workspaceManager.onEvents({
     onTerminalData: (paneId, data) => {
       send({ type: 'terminal.output', paneId, data })
+    },
+    onConversationEvent: (paneId, event) => {
+      send({ type: 'conversation.event', paneId, event })
     },
     onPaneStatus: (paneId, status) => {
       send({ type: 'pane.status', paneId, status })
@@ -101,11 +104,25 @@ export function setupWsHandlers(
 
     switch (event.type) {
       case 'terminal.input':
-        workspaceManager.writeToPane(event.paneId, event.data)
+        try {
+          workspaceManager.writeToPane(event.paneId, event.data)
+        } catch {
+          // Pane may have been closed between events — silently ignore
+        }
         break
 
       case 'terminal.resize':
-        workspaceManager.resizePane(event.paneId, event.cols, event.rows)
+        try {
+          workspaceManager.resizePane(event.paneId, event.cols, event.rows)
+        } catch {
+          // Pane may have been closed — ignore
+        }
+        break
+
+      case 'conversation.send':
+        workspaceManager.sendConversationToPane(event.paneId, event.text).catch((err) => {
+          console.error('conversation.send failed:', err)
+        })
         break
 
       case 'pane.create':

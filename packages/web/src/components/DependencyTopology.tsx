@@ -23,14 +23,14 @@ import { getPaneColorById } from './AgentIcon'
 
 // ─── View Modes ─────────────────────────────────────────────
 
-export type ViewMode = 'dependency' | 'directory' | 'heatmap' | 'agent' | 'temporal'
+export type ViewMode = 'agent' | 'directory' | 'dependency' | 'conflicts' | 'files'
 
 export const VIEW_MODE_META: Record<ViewMode, { label: string; desc: string }> = {
+  agent:      { label: 'Agent',       desc: 'Agent performance dashboard' },
+  directory:  { label: 'Modules',     desc: 'Module / directory structure' },
   dependency: { label: 'Imports',     desc: 'Import / dependency relationships' },
-  directory:  { label: 'Directory',   desc: 'Directory structure (5 levels)' },
-  heatmap:    { label: 'Heatmap',     desc: 'File activity frequency' },
-  agent:      { label: 'Agent',       desc: 'File ownership by agent clusters' },
-  temporal:   { label: 'Temporal',    desc: 'Chronological access order' },
+  conflicts:  { label: 'Conflicts',   desc: 'Active conflict detection' },
+  files:      { label: 'Files',       desc: 'All changed files with agent attribution' },
 }
 
 // ─── Module-level panes ref for node component color lookups ─
@@ -117,16 +117,6 @@ function calcHeat(filePath: string, activities: ActivityEntry[]): number {
   return count
 }
 
-function heatToColor(heat: number, maxHeat: number): string {
-  if (maxHeat <= 0 || heat <= 0) return 'transparent'
-  const t = Math.min(heat / Math.max(maxHeat, 1), 1)
-  if (t < 0.5) {
-    const p = t / 0.5
-    return `rgba(240, 136, 62, ${0.08 + p * 0.15})`
-  }
-  const p = (t - 0.5) / 0.5
-  return `rgba(248, 81, 73, ${0.2 + p * 0.2})`
-}
 
 // ─── Relative time ──────────────────────────────────────────
 
@@ -159,6 +149,7 @@ interface FileNodeData {
   importCount: number
   importedByCount: number
   conflicting: boolean
+  upstreamWarning?: boolean
   lastAgent: { name: string; timestamp: number } | null
   [key: string]: unknown
 }
@@ -441,277 +432,10 @@ function layoutDirectory(
   return { dirNodes, dirEdges }
 }
 
-// ─── 3. Heatmap Layout (heat-sorted grid) ───────────────────
 
-function layoutHeatmap(
-  graph: DepGraph,
-  heatMap: Map<string, number>,
-): Map<string, { x: number; y: number }> {
-  // Only include files with activity, sorted by heat descending
-  const sorted = graph.nodes
-    .filter((n) => (heatMap.get(n.id) || 0) > 0)
-    .sort((a, b) => {
-      const ha = heatMap.get(a.id) || 0
-      const hb = heatMap.get(b.id) || 0
-      if (hb !== ha) return hb - ha
-      return a.id.localeCompare(b.id)
-    })
 
-  const positions = new Map<string, { x: number; y: number }>()
-  const cols = Math.max(1, Math.ceil(Math.sqrt(sorted.length)))
-  const GAP_X = 12
-  const GAP_Y = 12
-
-  for (let i = 0; i < sorted.length; i++) {
-    const col = i % cols
-    const row = Math.floor(i / cols)
-    positions.set(sorted[i].id, {
-      x: col * (NODE_WIDTH + GAP_X),
-      y: row * (NODE_HEIGHT + GAP_Y),
-    })
-  }
-
-  return positions
-}
-
-// ─── 4. Agent Layout (left label + right file grid per row) ──
-
-const AGENT_FILE_COLS = 3       // file cards per row to the right of the label
-const AGENT_ROW_GAP_Y = 36     // vertical gap between agent rows
-const AGENT_LABEL_WIDTH = 160   // width of the agent name card on the left
-const AGENT_LABEL_GAP_X = 16   // gap between label card and file grid
-const AGENT_INNER_GAP_X = 10   // horizontal gap between file cards
-const AGENT_INNER_GAP_Y = 8    // vertical gap between file card rows
-
-interface AgentLabelNodeData {
-  label: string
-  fileCount: number
-  color: string
-  agentType: string
-  [key: string]: unknown
-}
-
-function AgentLabelNodeComponent({ data }: { data: AgentLabelNodeData }) {
-  return (
-    <div
-      style={{
-        width: AGENT_LABEL_WIDTH,
-        height: '100%',
-        minHeight: NODE_HEIGHT,
-        borderRadius: 8,
-        background: `color-mix(in srgb, ${data.color} 10%, var(--bg-elevated))`,
-        border: `1.5px solid ${data.color}`,
-        fontFamily: 'var(--font-mono)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        padding: '12px 10px',
-      }}
-    >
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: '50%',
-          background: `color-mix(in srgb, ${data.color} 20%, transparent)`,
-          border: `2px solid ${data.color}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 12,
-          fontWeight: 800,
-          color: data.color,
-        }}
-      >
-        {data.label.charAt(0).toUpperCase()}
-      </div>
-      <div style={{
-        fontSize: 11,
-        fontWeight: 700,
-        color: data.color,
-        textAlign: 'center',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        maxWidth: '100%',
-      }}>
-        {data.label}
-      </div>
-      <div style={{
-        fontSize: 9,
-        color: 'var(--text-muted)',
-      }}>
-        {data.fileCount} file{data.fileCount !== 1 ? 's' : ''}
-      </div>
-    </div>
-  )
-}
-
-function layoutAgent(
-  graph: DepGraph,
-  heatMap: Map<string, number>,
-  activeFileAgents: Map<string, AgentActivity[]>,
-  activities: ActivityEntry[],
-  panes: Array<{ id: string; name: string; agent: string }>,
-): { positions: Map<string, { x: number; y: number }>; extraNodes: Node[] } {
-  // Assign each file to the agent that touched it most
-  const fileAgentCount = new Map<string, Map<string, number>>()
-  for (const a of activities) {
-    if (!fileAgentCount.has(a.file)) fileAgentCount.set(a.file, new Map())
-    const counts = fileAgentCount.get(a.file)!
-    counts.set(a.paneId, (counts.get(a.paneId) || 0) + 1)
-  }
-  for (const [file, agents] of activeFileAgents) {
-    if (!fileAgentCount.has(file)) fileAgentCount.set(file, new Map())
-    const counts = fileAgentCount.get(file)!
-    for (const a of agents) {
-      counts.set(a.paneId, (counts.get(a.paneId) || 0) + 5)
-    }
-  }
-
-  // Group files by primary agent (skip untouched files)
-  const agentFiles = new Map<string, string[]>()
-
-  for (const node of graph.nodes) {
-    const counts = fileAgentCount.get(node.id)
-    if (!counts || counts.size === 0) continue
-    let bestPane = ''
-    let bestCount = 0
-    for (const [paneId, count] of counts) {
-      if (count > bestCount) { bestPane = paneId; bestCount = count }
-    }
-    if (!agentFiles.has(bestPane)) agentFiles.set(bestPane, [])
-    agentFiles.get(bestPane)!.push(node.id)
-  }
-
-  // Sort files within each cluster by heat descending
-  for (const [, files] of agentFiles) {
-    files.sort((a, b) => (heatMap.get(b) || 0) - (heatMap.get(a) || 0))
-  }
-
-  const positions = new Map<string, { x: number; y: number }>()
-  const extraNodes: Node[] = []
-
-  // x offset where file cards start (right of the label card)
-  const filesStartX = AGENT_LABEL_WIDTH + AGENT_LABEL_GAP_X
-
-  let clusterY = 0
-
-  const allGroups: Array<{ paneId: string; files: string[] }> = []
-  for (const [paneId, files] of agentFiles) allGroups.push({ paneId, files })
-
-  for (const group of allGroups) {
-    const pane = panes.find((p) => p.id === group.paneId)
-    const agentName = pane?.name || group.paneId
-    const agentType = pane?.agent || 'workspace'
-    const color = getPaneColorById(group.paneId, panes)
-
-    const cols = AGENT_FILE_COLS
-    const rows = Math.max(1, Math.ceil(group.files.length / cols))
-    const filesHeight = rows * NODE_HEIGHT + (rows - 1) * AGENT_INNER_GAP_Y
-    // Label card height matches files area (at least one NODE_HEIGHT)
-    const labelHeight = Math.max(NODE_HEIGHT, filesHeight)
-
-    // Agent label node on the left, vertically centered
-    extraNodes.push({
-      id: `__agent:${group.paneId}`,
-      type: 'agentLabel',
-      position: { x: 0, y: clusterY },
-      data: {
-        label: agentName,
-        fileCount: group.files.length,
-        color,
-        agentType,
-      } satisfies AgentLabelNodeData,
-      selectable: false,
-      draggable: false,
-      style: {
-        width: AGENT_LABEL_WIDTH,
-        height: labelHeight,
-      },
-    })
-
-    // File cards to the right, in horizontal rows
-    for (let i = 0; i < group.files.length; i++) {
-      const col = i % cols
-      const row = Math.floor(i / cols)
-      positions.set(group.files[i], {
-        x: filesStartX + col * (NODE_WIDTH + AGENT_INNER_GAP_X),
-        y: clusterY + row * (NODE_HEIGHT + AGENT_INNER_GAP_Y),
-      })
-    }
-
-    clusterY += labelHeight + AGENT_ROW_GAP_Y
-  }
-
-  return { positions, extraNodes }
-}
 
 // ─── 5. Temporal Layout (chronological sequence) ────────────
-
-function layoutTemporal(
-  graph: DepGraph,
-  activities: ActivityEntry[],
-  panes: Array<{ id: string }>,
-): { positions: Map<string, { x: number; y: number }>; edges: Edge[] } {
-  // Order files by first-touched time
-  const firstTouch = new Map<string, number>()
-  const filePaneId = new Map<string, string>()
-  const sortedActivities = [...activities].sort((a, b) => a.timestamp - b.timestamp)
-  for (const a of sortedActivities) {
-    if (!firstTouch.has(a.file)) {
-      firstTouch.set(a.file, a.timestamp)
-      filePaneId.set(a.file, a.paneId)
-    }
-  }
-
-  const graphFileSet = new Set(graph.nodes.map((n) => n.id))
-  const touchedOrdered = [...firstTouch.entries()]
-    .sort((a, b) => a[1] - b[1])
-    .filter(([id]) => graphFileSet.has(id))
-    .map(([id]) => id)
-
-  // Only show touched files
-  const positions = new Map<string, { x: number; y: number }>()
-  const COLS = 3
-  const GAP_X = 12
-  const GAP_Y = 12
-
-  for (let i = 0; i < touchedOrdered.length; i++) {
-    const col = i % COLS
-    const row = Math.floor(i / COLS)
-    positions.set(touchedOrdered[i], {
-      x: col * (NODE_WIDTH + GAP_X),
-      y: row * (NODE_HEIGHT + GAP_Y),
-    })
-  }
-
-  // Sequence edges showing access order
-  const edges: Edge[] = []
-  for (let i = 1; i < Math.min(touchedOrdered.length, 40); i++) {
-    const prev = touchedOrdered[i - 1]
-    const curr = touchedOrdered[i]
-    const paneId = filePaneId.get(curr) || ''
-    const color = paneId ? getPaneColorById(paneId, panes) : 'var(--text-muted)'
-    edges.push({
-      id: `__seq:${i}`,
-      source: prev,
-      target: curr,
-      type: 'smoothstep',
-      animated: false,
-      label: `${i}`,
-      labelStyle: { fontSize: 8, fill: 'var(--text-muted)' },
-      labelBgStyle: { fill: 'var(--bg-surface)', fillOpacity: 0.8 },
-      labelBgPadding: [2, 4] as [number, number],
-      markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8, color },
-      style: { stroke: color, strokeWidth: 1.5, opacity: 0.4 },
-    })
-  }
-
-  return { positions, edges }
-}
 
 // ═══════════════════════════════════════════════════════════
 // Custom Node Components
@@ -721,14 +445,9 @@ function FileNodeComponent({ data }: { data: FileNodeData }) {
   const hasActivity = data.activeAgents.length > 0
   const primaryAgent = data.activeAgents[0]
   const agentColor = primaryAgent ? getPaneColorById(primaryAgent.paneId, _currentPanes) : null
-  const roleMeta = ROLE_META[data.role]
   const gitMeta = GIT_STATUS_META[data.gitStatus]
-  const heatBg = heatToColor(data.heat, data.maxHeat)
   const isConflict = data.conflicting
-
-  const maxFan = Math.max(data.importCount, data.importedByCount, 1)
-  const fanOutW = Math.round((data.importCount / maxFan) * 52)
-  const fanInW = Math.round((data.importedByCount / maxFan) * 52)
+  const isUpstream = data.upstreamWarning
 
   return (
     <div
@@ -736,24 +455,28 @@ function FileNodeComponent({ data }: { data: FileNodeData }) {
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
         borderRadius: 8,
-        background: hasActivity
-          ? `color-mix(in srgb, ${agentColor} 12%, var(--bg-elevated))`
-          : heatBg !== 'transparent'
-            ? `linear-gradient(135deg, var(--bg-elevated) 60%, ${heatBg})`
-            : 'var(--bg-elevated)',
+        background: isConflict
+          ? 'color-mix(in srgb, #FBBF24 8%, var(--bg-elevated))'
+          : isUpstream
+            ? 'color-mix(in srgb, #FBBF24 5%, var(--bg-elevated))'
+            : hasActivity
+              ? `color-mix(in srgb, ${agentColor} 10%, var(--bg-elevated))`
+              : 'var(--bg-elevated)',
         border: isConflict
           ? '2px solid #FBBF24'
-          : hasActivity
-            ? `1.5px solid ${agentColor}`
-            : '1px solid var(--border-default)',
+          : isUpstream
+            ? '1.5px dashed #FBBF24'
+            : hasActivity
+              ? `1.5px solid ${agentColor}`
+              : '1px solid var(--border-default)',
         fontFamily: 'var(--font-mono)',
         position: 'relative',
         transition: 'border-color 0.3s, background 0.3s, box-shadow 0.3s',
         boxShadow: isConflict
           ? '0 0 16px rgba(251, 191, 36, 0.3)'
           : hasActivity
-            ? `0 0 14px color-mix(in srgb, ${agentColor} 30%, transparent)`
-            : '0 1px 4px rgba(0,0,0,0.12)',
+            ? `0 0 12px color-mix(in srgb, ${agentColor} 25%, transparent)`
+            : '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -762,15 +485,8 @@ function FileNodeComponent({ data }: { data: FileNodeData }) {
       <Handle type="target" position={Position.Left} style={{ background: 'var(--text-muted)', width: 5, height: 5, border: 'none' }} />
       <Handle type="source" position={Position.Right} style={{ background: 'var(--text-muted)', width: 5, height: 5, border: 'none' }} />
 
-      {/* Row 1: Header */}
+      {/* Row 1: Git status + conflict/upstream badges */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px 0', minHeight: 18 }}>
-        <span style={{
-          fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
-          color: roleMeta.color, background: `color-mix(in srgb, ${roleMeta.color} 14%, transparent)`,
-          padding: '1px 5px', borderRadius: 3, lineHeight: '14px',
-        }}>
-          {roleMeta.label}
-        </span>
         {data.gitStatus !== 'clean' && (
           <span style={{
             fontSize: 8, fontWeight: 700, color: gitMeta.color,
@@ -780,18 +496,23 @@ function FileNodeComponent({ data }: { data: FileNodeData }) {
             {gitMeta.label}
           </span>
         )}
-        {isConflict && <span style={{ fontSize: 10, lineHeight: 1 }} title="Multiple agents editing">⚠</span>}
-        <span style={{ flex: 1 }} />
-        {data.heat > 0 && (
-          <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            {Array.from({ length: Math.min(Math.ceil(data.heat), 5) }).map((_, i) => (
-              <div key={i} style={{
-                width: 4, height: 4, borderRadius: '50%',
-                background: data.heat > 3 ? '#F85149' : data.heat > 1 ? '#F0883E' : '#FBBF24',
-                opacity: 0.5 + (i / 5) * 0.5,
-              }} />
-            ))}
-          </div>
+        {isConflict && (
+          <span style={{
+            fontSize: 8, fontWeight: 700, color: '#FBBF24',
+            background: 'color-mix(in srgb, #FBBF24 14%, transparent)',
+            padding: '1px 5px', borderRadius: 3, lineHeight: '14px',
+          }}>
+            CONFLICT
+          </span>
+        )}
+        {isUpstream && !isConflict && (
+          <span style={{
+            fontSize: 8, fontWeight: 600, color: '#FBBF24',
+            background: 'color-mix(in srgb, #FBBF24 10%, transparent)',
+            padding: '1px 5px', borderRadius: 3, lineHeight: '14px',
+          }}>
+            upstream changed
+          </span>
         )}
       </div>
 
@@ -811,48 +532,32 @@ function FileNodeComponent({ data }: { data: FileNodeData }) {
         </div>
       </div>
 
-      {/* Row 3: Agent activity / last-agent / fan bars */}
-      <div style={{ padding: '0 8px 5px', display: 'flex', alignItems: 'flex-end', gap: 6, minHeight: 22 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {hasActivity ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {data.activeAgents.map((a) => {
-                const c = getPaneColorById(a.paneId, _currentPanes)
-                return (
-                <div key={a.paneId} style={{
-                  display: 'flex', alignItems: 'center', gap: 3, fontSize: 8,
-                  color: c, fontWeight: 600, maxWidth: '100%',
-                }}>
-                  <div style={{
-                    width: 4, height: 4, borderRadius: '50%', background: c,
-                    animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0,
-                  }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.paneName}</span>
-                  <span style={{ opacity: 0.5, fontWeight: 400 }}>{a.action}</span>
-                </div>
-                )
-              })}
-            </div>
-          ) : data.lastAgent ? (
-            <div style={{ fontSize: 8, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {data.lastAgent.name} · {relativeTime(data.lastAgent.timestamp)}
-            </div>
-          ) : null}
-        </div>
-        {(data.importCount > 0 || data.importedByCount > 0) && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', flexShrink: 0, width: 68 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <span style={{ fontSize: 7, color: 'var(--text-muted)', width: 8, textAlign: 'right' }}>{data.importCount}</span>
-              <div style={{ height: 3, width: fanOutW, borderRadius: 2, background: 'color-mix(in srgb, #58A6FF 50%, transparent)' }} />
-              <span style={{ fontSize: 7, color: 'var(--text-muted)' }}>↗</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <span style={{ fontSize: 7, color: 'var(--text-muted)', width: 8, textAlign: 'right' }}>{data.importedByCount}</span>
-              <div style={{ height: 3, width: fanInW, borderRadius: 2, background: 'color-mix(in srgb, #F0883E 50%, transparent)' }} />
-              <span style={{ fontSize: 7, color: 'var(--text-muted)' }}>↙</span>
-            </div>
+      {/* Row 3: Agent activity */}
+      <div style={{ padding: '0 8px 5px', minHeight: 20 }}>
+        {hasActivity ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {data.activeAgents.map((a) => {
+              const c = getPaneColorById(a.paneId, _currentPanes)
+              return (
+              <div key={a.paneId} style={{
+                display: 'flex', alignItems: 'center', gap: 3, fontSize: 9,
+                color: c, fontWeight: 600, maxWidth: '100%',
+              }}>
+                <div style={{
+                  width: 5, height: 5, borderRadius: '50%', background: c,
+                  animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0,
+                }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.paneName}</span>
+                <span style={{ opacity: 0.5, fontWeight: 400 }}>{a.action}</span>
+              </div>
+              )
+            })}
           </div>
-        )}
+        ) : data.lastAgent ? (
+          <div style={{ fontSize: 8, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {data.lastAgent.name} · {relativeTime(data.lastAgent.timestamp)}
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -964,7 +669,6 @@ function DirNodeComponent({ data }: { data: DirNodeData }) {
 const nodeTypes: NodeTypes = {
   fileNode: FileNodeComponent,
   dirNode: DirNodeComponent,
-  agentLabel: AgentLabelNodeComponent,
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1017,40 +721,73 @@ function buildFlowData(ctx: BuildContext, viewMode: ViewMode): { nodes: Node[]; 
     }
   }
 
-  // Get positions + extra nodes based on view mode
-  let positions: Map<string, { x: number; y: number }>
-  let extraNodes: Node[] = []
-  let extraEdges: Edge[] = []
+  // Get positions based on view mode
+  // (agent, conflicts, files are handled by separate components, not DependencyTopology)
+  const positions = layoutDependency(graph)
 
-  switch (viewMode) {
-    case 'heatmap': {
-      positions = layoutHeatmap(graph, heatMap)
-      break
+  // For dependency view: filter to active files + their direct neighbors
+  // This focuses the view on what agents are actually touching
+  let visibleNodeIds = nodeIds
+  if (viewMode === 'dependency' && activeFiles.size > 0) {
+    visibleNodeIds = new Set<string>()
+    // Add all active files
+    for (const file of activeFiles) {
+      if (nodeIds.has(file)) visibleNodeIds.add(file)
     }
-    case 'agent': {
-      const r = layoutAgent(graph, heatMap, activeFileAgents, activities, panes)
-      positions = r.positions
-      extraNodes = r.extraNodes
-      break
+    // Add files touched in recent activities
+    for (const a of activities) {
+      if (nodeIds.has(a.file)) visibleNodeIds.add(a.file)
     }
-    case 'temporal': {
-      const r = layoutTemporal(graph, activities, panes)
-      positions = r.positions
-      extraEdges = r.edges
-      break
+    // Add direct imports and importers of visible files
+    const neighbors = new Set<string>()
+    for (const node of graph.nodes) {
+      if (visibleNodeIds.has(node.id)) {
+        for (const imp of node.imports) {
+          if (nodeIds.has(imp)) neighbors.add(imp)
+        }
+      }
+      // Check if this node imports any visible file
+      for (const imp of node.imports) {
+        if (visibleNodeIds.has(imp) && nodeIds.has(node.id)) {
+          neighbors.add(node.id)
+        }
+      }
     }
-    default: {
-      positions = layoutDependency(graph)
-      break
+    for (const n of neighbors) visibleNodeIds.add(n)
+
+    // If we still have nothing visible, fall back to all
+    if (visibleNodeIds.size === 0) visibleNodeIds = nodeIds
+  }
+
+  // Dependency conflict propagation: files that import a file being edited get a warning
+  const upstreamWarnings = new Set<string>()
+  if (viewMode === 'dependency') {
+    const editedFiles = new Set<string>()
+    for (const [file, agents] of activeFileAgents) {
+      if (agents.some((a) => a.action !== 'read')) editedFiles.add(file)
+    }
+    for (const a of activities) {
+      if (a.action !== 'read') editedFiles.add(a.file)
+    }
+    // Find files that import any edited file
+    for (const node of graph.nodes) {
+      if (editedFiles.has(node.id)) continue
+      for (const imp of node.imports) {
+        if (editedFiles.has(imp)) {
+          upstreamWarnings.add(node.id)
+          break
+        }
+      }
     }
   }
 
   // Build file nodes
-  const nodes: Node[] = [...extraNodes]
+  const nodes: Node[] = []
 
   for (const node of graph.nodes) {
     const pos = positions.get(node.id)
     if (!pos) continue
+    if (!visibleNodeIds.has(node.id)) continue
 
     const fileName = node.id.split('/').pop() || node.id
     const dir = node.id.includes('/') ? node.id.substring(0, node.id.lastIndexOf('/')) : '.'
@@ -1071,30 +808,42 @@ function buildFlowData(ctx: BuildContext, viewMode: ViewMode): { nodes: Node[]; 
         importCount: node.imports.filter((i) => nodeIds.has(i)).length,
         importedByCount: importedByCount.get(node.id) || 0,
         conflicting: conflictFiles.has(node.id),
+        upstreamWarning: upstreamWarnings.has(node.id),
         lastAgent: lastAgentMap.get(node.id) || null,
       } satisfies FileNodeData,
     })
   }
 
   // Build edges
-  const edges: Edge[] = [...extraEdges]
+  const edges: Edge[] = []
 
   // Dependency edges only for dependency view
   if (viewMode === 'dependency') {
     for (const node of graph.nodes) {
+      if (!visibleNodeIds.has(node.id)) continue
       for (const imp of node.imports) {
-        if (!nodeIds.has(imp)) continue
-        const isActive = activeFiles.has(node.id)
-        const agentInfo = activeFileAgents.get(node.id)?.[0]
-        const color = isActive && agentInfo ? getPaneColorById(agentInfo.paneId, panes) : 'var(--text-muted)'
+        if (!visibleNodeIds.has(imp)) continue
+        const isActive = activeFiles.has(node.id) || activeFiles.has(imp)
+        const agentInfo = activeFileAgents.get(node.id)?.[0] || activeFileAgents.get(imp)?.[0]
+        const isUpstreamEdge = upstreamWarnings.has(node.id) && activeFiles.has(imp)
+        const color = isUpstreamEdge
+          ? '#FBBF24'
+          : isActive && agentInfo
+            ? getPaneColorById(agentInfo.paneId, panes)
+            : 'var(--text-muted)'
         edges.push({
           id: `${node.id}->${imp}`,
           source: node.id,
           target: imp,
           type: 'smoothstep',
-          animated: isActive,
+          animated: isActive || isUpstreamEdge,
           markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color },
-          style: { stroke: color, strokeWidth: isActive ? 2 : 1, opacity: isActive ? 0.85 : 0.35 },
+          style: {
+            stroke: color,
+            strokeWidth: isUpstreamEdge ? 2.5 : isActive ? 2 : 1,
+            opacity: isActive || isUpstreamEdge ? 0.85 : 0.35,
+            strokeDasharray: isUpstreamEdge ? '6 3' : undefined,
+          },
         })
       }
     }

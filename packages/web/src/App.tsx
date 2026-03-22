@@ -21,6 +21,7 @@ export function App() {
     addFileActivity,
     setMergeResult,
     clearMergeResult,
+    applyConversationEvent,
   } = useWorkspaceStore()
 
   const handleMessage = useCallback(
@@ -41,6 +42,10 @@ export function App() {
 
         case 'terminal.output':
           writeToTerminal(event.paneId, event.data)
+          break
+
+        case 'conversation.event':
+          applyConversationEvent(event.paneId, event.event)
           break
 
         case 'pane.status':
@@ -97,7 +102,7 @@ export function App() {
           break
       }
     },
-    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitAllDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity, setMergeResult, clearMergeResult],
+    [setWorkspace, addPane, removePane, updatePaneStatus, updatePaneMeta, setConnectionStatus, setFileTree, setGitAllDiffs, setGitBranchInfo, setPaneDiffs, addActivity, addFileActivity, setMergeResult, clearMergeResult, applyConversationEvent],
   )
 
   const { send, status } = useWebSocket({ onMessage: handleMessage })

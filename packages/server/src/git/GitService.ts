@@ -70,11 +70,19 @@ export class GitService {
 
   async refresh(): Promise<void> {
     try {
-      const result = await this.getDiffs()
+      const result = await Promise.race([
+        this.getDiffs(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('git diff timeout')), 15000)
+        ),
+      ])
       this.currentResult = result
       this.notifyListeners()
-    } catch {
-      // Git operation failed, ignore
+    } catch (err) {
+      if ((err as Error).message === 'git diff timeout') {
+        console.warn('[GitService] git diff timed out (15s), using cached result')
+      }
+      // Other git failures also silently use cached result
     }
   }
 

@@ -81,7 +81,16 @@ export class PtyManager {
       }
     }
     if (agentDef?.env) {
+      // Block dangerous env vars that could be used for injection
+      const BLOCKED_ENV_KEYS = new Set([
+        'PATH', 'LD_PRELOAD', 'LD_LIBRARY_PATH',
+        'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH', 'DYLD_FRAMEWORK_PATH',
+      ])
       for (const [key, value] of Object.entries(agentDef.env)) {
+        if (BLOCKED_ENV_KEYS.has(key)) {
+          console.warn(`[PTY] Ignoring blocked env var from agent config: ${key}`)
+          continue
+        }
         // Resolve ${VAR} references from process.env
         const resolved = value.replace(/\$\{(\w+)\}/g, (_, varName: string) => {
           return process.env[varName] || ''
@@ -320,6 +329,12 @@ export class PtyManager {
       entry.shellDetector?.dispose()
       entry.agentDetector?.dispose()
       entry.parser.reset()
+
+      // Clear callback arrays to break closure references and prevent leaks
+      entry.onDataCallbacks.length = 0
+      entry.onStatusCallbacks.length = 0
+      entry.onMetaCallbacks.length = 0
+      entry.onActivityCallbacks.length = 0
 
       try {
         entry.pty.kill()

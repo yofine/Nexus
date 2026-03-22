@@ -46,6 +46,7 @@ export class AgentsYamlWriter {
           id: p.id,
           name: p.name,
           agent: p.agent,
+          runtime: p.runtime,
           pid: p.pid,
           status: p.status,
           isolation: p.isolation || 'shared',

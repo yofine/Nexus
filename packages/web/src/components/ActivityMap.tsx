@@ -3,7 +3,11 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ActivityEntry } from '@/stores/workspaceStore'
 import { getPaneColorById } from './AgentIcon'
 import { DependencyTopology, VIEW_MODE_META, type ViewMode } from './DependencyTopology'
-import { Eye, Pencil, FilePlus, FileX, FileCode2, Filter, GitFork, FolderTree, Flame, Users, Clock } from 'lucide-react'
+import { AgentDashboard } from './AgentDashboard'
+import { ConflictsPanel } from './ConflictsPanel'
+import { TimelineSwimlane } from './TimelineSwimlane'
+import { Eye, Pencil, FilePlus, FileX, FileCode2, Filter, GitFork, FolderTree, FileStack, Users, AlertTriangle, List, Rows3 } from 'lucide-react'
+import { FilesPanel } from './FilesPanel'
 import type { FileAction, DepGraph } from '@/types'
 
 // ── Helpers ──
@@ -90,11 +94,11 @@ function TimelineEntry({ entry, isNew, color }: { entry: ActivityEntry; isNew: b
 // ── View Mode Icons ──
 
 const VIEW_ICONS: Record<ViewMode, typeof GitFork> = {
-  dependency: GitFork,
-  directory:  FolderTree,
-  heatmap:    Flame,
   agent:      Users,
-  temporal:   Clock,
+  directory:  FolderTree,
+  dependency: GitFork,
+  conflicts:  AlertTriangle,
+  files:      FileStack,
 }
 
 // ── Main Component ──
@@ -104,8 +108,9 @@ export function ActivityMap() {
   const [newEntryIds, setNewEntryIds] = useState<Set<string>>(new Set())
   const prevActivityCountRef = useRef(0)
   const [loading, setLoading] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('dependency')
+  const [viewMode, setViewMode] = useState<ViewMode>('agent')
   const [filterPaneId, setFilterPaneId] = useState<string | null>(null)
+  const [timelineMode, setTimelineMode] = useState<'list' | 'swimlane'>('list')
 
   // Fetch dependency graph on mount
   useEffect(() => {
@@ -255,9 +260,11 @@ export function ActivityMap() {
                   style={{ '--cursor-color': color } as React.CSSProperties}
                 />
                 <span style={{ color, fontWeight: 600 }}>{pane.name}</span>
-                <span style={{ color: 'var(--text-muted)' }}>→</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-                  {current.file.split('/').pop()}
+                <span style={{ color: getActionColor(current.action), display: 'flex', flexShrink: 0 }}>
+                  {getActionIcon(current.action, 10)}
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {current.file.split('/').slice(-2).join('/')}
                 </span>
               </div>
             )
@@ -265,9 +272,15 @@ export function ActivityMap() {
         </div>
       )}
 
-      {/* Center: Topology graph */}
+      {/* Center: View content */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        {loading && !depGraph ? (
+        {viewMode === 'agent' ? (
+          <AgentDashboard />
+        ) : viewMode === 'conflicts' ? (
+          <ConflictsPanel />
+        ) : viewMode === 'files' ? (
+          <FilesPanel />
+        ) : loading && !depGraph ? (
           <div
             style={{
               display: 'flex',
@@ -314,7 +327,7 @@ export function ActivityMap() {
       <div
         style={{
           flexShrink: 0,
-          maxHeight: 200,
+          maxHeight: timelineMode === 'swimlane' ? 280 : 200,
           overflow: 'auto',
           background: 'var(--bg-surface)',
           borderTop: '1px solid var(--border-subtle)',
@@ -334,8 +347,36 @@ export function ActivityMap() {
         >
           <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timeline</span>
 
-          {/* Agent filter chips */}
-          {activePaneList.length > 1 && (
+          {/* List / Swimlane toggle */}
+          <div style={{ display: 'flex', gap: 1, background: 'var(--bg-base)', borderRadius: 'var(--radius-sm)', padding: 1, border: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={() => setTimelineMode('list')}
+              title="List view"
+              style={{
+                background: timelineMode === 'list' ? 'var(--bg-elevated)' : 'transparent',
+                border: 'none', borderRadius: 2, padding: '1px 4px', cursor: 'pointer',
+                color: timelineMode === 'list' ? 'var(--text-primary)' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center',
+              }}
+            >
+              <List width={10} height={10} />
+            </button>
+            <button
+              onClick={() => setTimelineMode('swimlane')}
+              title="Swimlane view"
+              style={{
+                background: timelineMode === 'swimlane' ? 'var(--bg-elevated)' : 'transparent',
+                border: 'none', borderRadius: 2, padding: '1px 4px', cursor: 'pointer',
+                color: timelineMode === 'swimlane' ? 'var(--text-primary)' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center',
+              }}
+            >
+              <Rows3 width={10} height={10} />
+            </button>
+          </div>
+
+          {/* Agent filter chips (list mode only) */}
+          {timelineMode === 'list' && activePaneList.length > 1 && (
             <>
               <div style={{ width: 1, height: 12, background: 'var(--border-subtle)' }} />
               <Filter width={10} height={10} style={{ opacity: 0.5 }} />
@@ -383,7 +424,10 @@ export function ActivityMap() {
             </>
           )}
         </div>
-        {filteredActivities.length === 0 ? (
+
+        {timelineMode === 'swimlane' ? (
+          <TimelineSwimlane />
+        ) : filteredActivities.length === 0 ? (
           <div style={{ padding: '8px 12px', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
             {filterPaneId ? 'No activity for this agent' : 'No activity yet'}
           </div>

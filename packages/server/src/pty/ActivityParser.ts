@@ -22,6 +22,8 @@ function stripAnsi(str: string): string {
  * Claude Code outputs tool usage with various ANSI-styled formats.
  * This parser strips ANSI codes and matches known patterns.
  */
+const MAX_BUFFER_SIZE = 64 * 1024 // 64KB — same as StatuslineParser
+
 export class ActivityParser {
   private buffer = ''
   private lastFile = ''
@@ -31,6 +33,10 @@ export class ActivityParser {
   parse(data: string): FileActivity | null {
     if (!data.includes('\n')) {
       this.buffer += data
+      // Prevent unbounded buffer growth (e.g., binary output without newlines)
+      if (this.buffer.length > MAX_BUFFER_SIZE) {
+        this.buffer = ''
+      }
       return null
     }
 
@@ -176,12 +182,19 @@ export class ActivityParser {
       .replace(/^\(/, '')      // Remove leading paren
   }
 
+  // Paths under these prefixes are Nexus internals or noise — ignore them
+  private static IGNORED_PREFIXES = ['.nexus/', 'node_modules/', '.git/']
+
   private isValidPath(file: string): boolean {
     if (!file || file.length < 3) return false
     // Must have a file extension
     if (!/\.\w{1,10}$/.test(file)) return false
     // Must not be absolute path or URL
     if (file.startsWith('/') || file.includes('://')) return false
+    // Skip Nexus internal and noise paths
+    for (const prefix of ActivityParser.IGNORED_PREFIXES) {
+      if (file.startsWith(prefix)) return false
+    }
     // No suspicious chars
     if (/[<>|&$`\\{}[\]]/.test(file)) return false
     // Reasonable length

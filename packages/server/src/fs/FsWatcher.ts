@@ -6,6 +6,7 @@ import type { FileNode, FileActivity } from '../types.ts'
 const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
+  '.nexus',
   'dist',
   '.cache',
   '.turbo',
@@ -139,7 +140,7 @@ export class FsWatcher {
   }
 
   private buildTree(dirPath: string, depth: number): FileNode[] {
-    if (depth > 8) return [] // Limit recursion depth
+    if (depth > 5) return [] // Match chokidar watch depth
 
     try {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true })
