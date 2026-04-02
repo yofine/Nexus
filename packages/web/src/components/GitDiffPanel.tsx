@@ -18,8 +18,12 @@ import {
   Upload,
   MessageSquarePlus,
   Send,
+  Eye,
+  EyeOff,
+  Users,
 } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { getPaneColorById } from './AgentIcon'
 import type { ClientEvent, FileDiff } from '@/types'
 
 interface GitDiffPanelProps {
@@ -350,12 +354,18 @@ interface DiffFileItemProps {
   onStage?: (file: string) => void
   onUnstage?: (file: string) => void
   onDiscard?: (file: string) => void
+  isReviewed?: boolean
+  onToggleReviewed?: () => void
+  agentColors?: string[]      // pane colors for agents that modified this file
+  agentNames?: string[]       // pane names for tooltip
+  importRefCount?: number     // number of files that import this file
 }
 
-function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard }: DiffFileItemProps) {
+function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard, isReviewed, onToggleReviewed, agentColors, agentNames, importRefCount }: DiffFileItemProps) {
   const [expanded, setExpanded] = useState(false)
   const { openFileTab } = useWorkspaceStore()
   const Icon = statusIcons[diff.status] || FileEdit
+  const isMultiAgent = (agentColors?.length ?? 0) > 1
 
   const handleOpenFile = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -363,7 +373,7 @@ function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard }: DiffF
   }
 
   return (
-    <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+    <div style={{ borderBottom: '1px solid var(--border-subtle)', opacity: isReviewed ? 0.5 : 1 }}>
       <div
         onClick={() => setExpanded(!expanded)}
         style={{
@@ -376,6 +386,11 @@ function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard }: DiffF
           fontFamily: 'var(--font-mono)',
           color: 'var(--text-primary)',
           userSelect: 'none',
+          borderLeft: agentColors?.length === 1
+            ? `3px solid ${agentColors[0]}`
+            : isMultiAgent
+              ? `3px solid var(--status-warning, #F59E0B)`
+              : '3px solid transparent',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'var(--bg-overlay)'
@@ -389,6 +404,28 @@ function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard }: DiffF
         ) : (
           <ChevronRight className="icon-xs" style={{ color: 'var(--text-muted)' }} />
         )}
+
+        {/* Multi-agent conflict indicator */}
+        {isMultiAgent ? (
+          <span
+            title={`Modified by: ${agentNames?.join(', ')}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexShrink: 0 }}
+          >
+            <Users size={13} style={{ color: 'var(--status-warning, #F59E0B)' }} />
+          </span>
+        ) : agentColors?.length === 1 ? (
+          <span
+            title={agentNames?.[0]}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: agentColors[0],
+              flexShrink: 0,
+            }}
+          />
+        ) : null}
+
         <Icon className="icon-sm" style={{ color: statusColors[diff.status] }} />
         <span
           style={{
@@ -400,10 +437,48 @@ function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard }: DiffF
         >
           {diff.file}
         </span>
+
+        {/* Badges: import ref count, multi-agent */}
+        {isMultiAgent && (
+          <span style={{
+            fontSize: '10px',
+            color: 'var(--status-warning, #F59E0B)',
+            background: 'color-mix(in srgb, var(--status-warning, #F59E0B) 12%, transparent)',
+            padding: '1px 5px',
+            borderRadius: 'var(--radius-sm)',
+            fontWeight: 600,
+            flexShrink: 0,
+          }}>
+            {agentColors!.length} agents
+          </span>
+        )}
+        {importRefCount && importRefCount > 0 ? (
+          <span style={{
+            fontSize: '10px',
+            color: 'var(--accent-primary)',
+            background: 'var(--accent-subtle)',
+            padding: '1px 5px',
+            borderRadius: 'var(--radius-sm)',
+            fontWeight: 600,
+            flexShrink: 0,
+          }}>
+            {importRefCount} refs
+          </span>
+        ) : null}
+
         <div
           onClick={(e) => e.stopPropagation()}
           style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}
         >
+          {/* Review toggle */}
+          {onToggleReviewed && (
+            <ActionButton
+              icon={isReviewed ? EyeOff : Eye}
+              title={isReviewed ? 'Mark as unreviewed' : 'Mark as reviewed'}
+              onClick={(e) => { e.stopPropagation(); onToggleReviewed() }}
+              color={isReviewed ? 'var(--status-running)' : 'var(--text-muted)'}
+            />
+          )}
           <ActionButton icon={ExternalLink} title="Open file" onClick={handleOpenFile} />
           {mode === 'unstaged' && onStage && (
             <ActionButton
@@ -448,13 +523,17 @@ function DiffFileItem({ diff, mode, send, onStage, onUnstage, onDiscard }: DiffF
   )
 }
 
-function SectionHeader({ label, count, collapsed, onToggle, children }: {
+function SectionHeader({ label, count, collapsed, onToggle, reviewedCount, children }: {
   label: string
   count: number
   collapsed: boolean
   onToggle: () => void
+  reviewedCount?: number
   children?: React.ReactNode
 }) {
+  const hasReviewProgress = reviewedCount !== undefined && count > 0
+  const progressPct = hasReviewProgress ? Math.round((reviewedCount / count) * 100) : 0
+
   return (
     <div
       style={{
@@ -477,11 +556,43 @@ function SectionHeader({ label, count, collapsed, onToggle, children }: {
       ) : (
         <ChevronDown className="icon-xs" style={{ color: 'var(--text-muted)' }} />
       )}
-      <span style={{ flex: 1 }}>
+      <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
         {label}
-        <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>
+        <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
           {count}
         </span>
+        {hasReviewProgress && reviewedCount > 0 && (
+          <>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                width: 48,
+                height: 4,
+                background: 'var(--bg-overlay)',
+                borderRadius: 2,
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                style={{
+                  height: '100%',
+                  width: `${progressPct}%`,
+                  background: progressPct === 100 ? 'var(--status-running)' : 'var(--accent-primary)',
+                  borderRadius: 2,
+                  transition: 'width 0.2s',
+                }}
+              />
+            </span>
+            <span style={{
+              fontWeight: 400,
+              fontSize: 'var(--font-xs)',
+              color: progressPct === 100 ? 'var(--status-running)' : 'var(--text-muted)',
+            }}>
+              {reviewedCount}/{count}
+            </span>
+          </>
+        )}
       </span>
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 2 }}>
         {children}
@@ -491,7 +602,7 @@ function SectionHeader({ label, count, collapsed, onToggle, children }: {
 }
 
 export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
-  const { gitDiffs, gitStagedDiffs, gitBranchInfo, panes, paneDiffs } = useWorkspaceStore()
+  const { gitDiffs, gitStagedDiffs, gitBranchInfo, panes, paneDiffs, activities, depGraph, reviewedFiles, toggleFileReviewed } = useWorkspaceStore()
   const [confirmDiscardAll, setConfirmDiscardAll] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [stagedCollapsed, setStagedCollapsed] = useState(false)
@@ -503,16 +614,103 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
   const pane = isWorktree ? panes.find((p) => p.id === paneId) : undefined
   const mergeResult = useWorkspaceStore((s) => paneId ? s.mergeResults[paneId] : undefined)
 
-  const unstagedDiffs = useMemo(() => {
+  // ─── Feature #1: Agent attribution map ───────────────────
+  // Aggregate activities to determine which agents modified each file
+  const fileAgentMap = useMemo(() => {
+    const map: Record<string, Set<string>> = {}
+    for (const act of activities) {
+      if (act.action === 'edit' || act.action === 'write' || act.action === 'create') {
+        (map[act.file] ||= new Set()).add(act.paneId)
+      }
+    }
+    return map
+  }, [activities])
+
+  // Helper: get agent colors and names for a file
+  const getFileAgentInfo = useCallback((file: string) => {
+    const paneIds = fileAgentMap[file]
+    if (!paneIds || paneIds.size === 0) return { colors: [] as string[], names: [] as string[] }
+    const colors: string[] = []
+    const names: string[] = []
+    for (const pid of paneIds) {
+      colors.push(getPaneColorById(pid, panes))
+      const p = panes.find((pp) => pp.id === pid)
+      if (p) names.push(p.name)
+    }
+    return { colors, names }
+  }, [fileAgentMap, panes])
+
+  // ─── Feature #2: Import reference counts from depGraph ───
+  const importRefCounts = useMemo(() => {
+    if (!depGraph) return {} as Record<string, number>
+    const counts: Record<string, number> = {}
+    for (const node of depGraph.nodes) {
+      for (const imp of node.imports) {
+        counts[imp] = (counts[imp] ?? 0) + 1
+      }
+    }
+    return counts
+  }, [depGraph])
+
+  // ─── Diff sources ───────────────────────────────────────
+  const rawUnstagedDiffs = useMemo(() => {
     if (paneId && paneDiffs[paneId]) return paneDiffs[paneId]
     if (paneId) return []
     return gitDiffs
   }, [paneId, paneDiffs, gitDiffs])
 
-  const stagedDiffs = useMemo(() => {
+  const rawStagedDiffs = useMemo(() => {
     if (paneId) return [] // worktree panes don't show staged for now
     return gitStagedDiffs
   }, [paneId, gitStagedDiffs])
+
+  // ─── Feature #2: Priority sorting ───────────────────────
+  const sortDiffs = useCallback((diffs: FileDiff[]) => {
+    if (diffs.length <= 1) return diffs
+    return [...diffs].sort((a, b) => {
+      // P0: multi-agent conflict files first
+      const ac = (fileAgentMap[a.file]?.size ?? 0) > 1 ? 1 : 0
+      const bc = (fileAgentMap[b.file]?.size ?? 0) > 1 ? 1 : 0
+      if (ac !== bc) return bc - ac
+
+      // P1: high import-reference files first
+      const ai = importRefCounts[a.file] ?? 0
+      const bi = importRefCounts[b.file] ?? 0
+      if (ai !== bi) return bi - ai
+
+      // P2: larger diffs first
+      const as = a.hunks?.split('\n').length ?? 0
+      const bs = b.hunks?.split('\n').length ?? 0
+      return bs - as
+    })
+  }, [fileAgentMap, importRefCounts])
+
+  const unstagedDiffs = useMemo(() => sortDiffs(rawUnstagedDiffs), [rawUnstagedDiffs, sortDiffs])
+  const stagedDiffs = useMemo(() => sortDiffs(rawStagedDiffs), [rawStagedDiffs, sortDiffs])
+
+  // ─── Feature #3: Review progress ───────────────────────
+  const allDiffFiles = useMemo(() => {
+    const files = new Set<string>()
+    for (const d of unstagedDiffs) files.add(d.file)
+    for (const d of stagedDiffs) files.add(d.file)
+    return files
+  }, [unstagedDiffs, stagedDiffs])
+
+  const reviewedCount = useMemo(() => {
+    let count = 0
+    for (const file of allDiffFiles) {
+      if (file in reviewedFiles) count++
+    }
+    return count
+  }, [allDiffFiles, reviewedFiles])
+
+  const unstagedReviewedCount = useMemo(() => {
+    return unstagedDiffs.filter((d) => d.file in reviewedFiles).length
+  }, [unstagedDiffs, reviewedFiles])
+
+  const stagedReviewedCount = useMemo(() => {
+    return stagedDiffs.filter((d) => d.file in reviewedFiles).length
+  }, [stagedDiffs, reviewedFiles])
 
   const handleRefresh = useCallback(() => {
     if (paneId) {
@@ -636,6 +834,11 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
 
         <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', flex: 1 }}>
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
+          {reviewedCount > 0 && (
+            <span style={{ color: reviewedCount === totalChanges ? 'var(--status-running)' : 'var(--text-muted)' }}>
+              {' '}&middot; {reviewedCount}/{totalChanges} reviewed
+            </span>
+          )}
         </span>
 
         {/* Worktree actions: Merge + Discard */}
@@ -745,6 +948,7 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
                   count={stagedDiffs.length}
                   collapsed={stagedCollapsed}
                   onToggle={() => setStagedCollapsed(!stagedCollapsed)}
+                  reviewedCount={stagedReviewedCount}
                 >
                   {stagedDiffs.length > 0 && (
                     <ActionButton
@@ -758,15 +962,23 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
 
                 {!stagedCollapsed && (
                   <>
-                    {stagedDiffs.map((diff) => (
-                      <DiffFileItem
-                        key={`staged-${diff.file}`}
-                        diff={diff}
-                        mode="staged"
-                        send={send}
-                        onUnstage={handleUnstageFile}
-                      />
-                    ))}
+                    {stagedDiffs.map((diff) => {
+                      const { colors, names } = getFileAgentInfo(diff.file)
+                      return (
+                        <DiffFileItem
+                          key={`staged-${diff.file}`}
+                          diff={diff}
+                          mode="staged"
+                          send={send}
+                          onUnstage={handleUnstageFile}
+                          isReviewed={diff.file in reviewedFiles}
+                          onToggleReviewed={() => toggleFileReviewed(diff.file, diff.hunks || '')}
+                          agentColors={colors}
+                          agentNames={names}
+                          importRefCount={importRefCounts[diff.file]}
+                        />
+                      )
+                    })}
 
                     {/* Commit form */}
                     {stagedDiffs.length > 0 && (
@@ -829,6 +1041,7 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
               count={unstagedDiffs.length}
               collapsed={unstagedCollapsed}
               onToggle={() => setUnstagedCollapsed(!unstagedCollapsed)}
+              reviewedCount={unstagedReviewedCount}
             >
               {!isWorktree && unstagedDiffs.length > 0 && (
                 <>
@@ -848,16 +1061,24 @@ export function GitDiffPanel({ send, paneId }: GitDiffPanelProps) {
               )}
             </SectionHeader>
 
-            {!unstagedCollapsed && unstagedDiffs.map((diff) => (
-              <DiffFileItem
-                key={`unstaged-${diff.file}`}
-                diff={diff}
-                mode="unstaged"
-                send={send}
-                onStage={handleStageFile}
-                onDiscard={handleDiscardFile}
-              />
-            ))}
+            {!unstagedCollapsed && unstagedDiffs.map((diff) => {
+              const { colors, names } = getFileAgentInfo(diff.file)
+              return (
+                <DiffFileItem
+                  key={`unstaged-${diff.file}`}
+                  diff={diff}
+                  mode="unstaged"
+                  send={send}
+                  onStage={handleStageFile}
+                  onDiscard={handleDiscardFile}
+                  isReviewed={diff.file in reviewedFiles}
+                  onToggleReviewed={() => toggleFileReviewed(diff.file, diff.hunks || '')}
+                  agentColors={colors}
+                  agentNames={names}
+                  importRefCount={importRefCounts[diff.file]}
+                />
+              )
+            })}
           </>
         )}
       </div>

@@ -11,6 +11,8 @@ import {
   Zap,
   ChevronRight,
   AlertCircle,
+  LoaderCircle,
+  Save,
 } from 'lucide-react'
 import { AgentIcon } from './AgentIcon'
 import type { GlobalConfig, AgentDefinition, AgentAvailability } from '@/types'
@@ -64,76 +66,139 @@ const AGENT_DISPLAY: Record<string, { name: string; desc: string }> = {
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [config, setConfig] = useState<GlobalConfig | null>(null)
+  const [initialConfig, setInitialConfig] = useState<GlobalConfig | null>(null)
   const [availability, setAvailability] = useState<Record<string, AgentAvailability>>({})
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [savedFeedback, setSavedFeedback] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [editingAgent, setEditingAgent] = useState<string | null>(null)
+  const [fontValue, setFontValue] = useState(FONT_OPTIONS[0].value)
+  const [initialTheme, setInitialTheme] = useState<string | null>(null)
+  const [initialFont, setInitialFont] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      fetch('/api/config').then(r => r.json()).then(setConfig).catch(() => {})
-      fetch('/api/agents').then(r => r.json()).then(setAvailability).catch(() => {})
+      setLoading(true)
+      setLoadError(null)
+      setSaveError(null)
+
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark-ide'
+      const currentFont = localStorage.getItem('nexus-font-mono') || FONT_OPTIONS[0].value
+      setInitialTheme(currentTheme)
+      setInitialFont(currentFont)
+      setFontValue(currentFont)
+
+      Promise.all([
+        fetch('/api/config').then(async (r) => {
+          if (!r.ok) throw new Error('Failed to load settings')
+          return r.json()
+        }),
+        fetch('/api/agents').then(async (r) => {
+          if (!r.ok) throw new Error('Failed to load agent availability')
+          return r.json()
+        }).catch(() => ({})),
+      ]).then(([nextConfig, nextAvailability]) => {
+        setConfig(nextConfig)
+        setInitialConfig(nextConfig)
+        setAvailability(nextAvailability)
+      }).catch(() => {
+        setLoadError('Failed to load settings.')
+      }).finally(() => {
+        setLoading(false)
+      })
     }
   }, [isOpen])
+
+  useEffect(() => {
+    if (!savedFeedback) return
+    const timeout = window.setTimeout(() => setSavedFeedback(false), 1500)
+    return () => window.clearTimeout(timeout)
+  }, [savedFeedback])
 
   // ESC to close
   useEffect(() => {
     if (!isOpen) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') handleClose()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [isOpen, onClose])
+  }, [isOpen, config, initialTheme, initialFont, fontValue])
 
-  const saveConfig = useCallback(async (updated: GlobalConfig) => {
-    setSaving(true)
-    try {
-      await fetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      })
-      setConfig(updated)
-      setSavedFeedback(true)
-      setTimeout(() => setSavedFeedback(false), 1500)
-    } catch { /* ignore */ }
-    setSaving(false)
-  }, [])
-
-  const handleThemeChange = useCallback((themeId: string) => {
+  const applyThemePreview = useCallback((themeId: string) => {
     document.documentElement.setAttribute('data-theme', themeId)
     localStorage.setItem('nexus-theme', themeId)
-    if (config) {
-      const updated = { ...config, defaults: { ...config.defaults, theme: themeId } }
-      saveConfig(updated)
+  }, [])
+
+  const applyFontPreview = useCallback((nextFont: string) => {
+    document.documentElement.style.setProperty('--font-mono', nextFont)
+    localStorage.setItem('nexus-font-mono', nextFont)
+    setFontValue(nextFont)
+  }, [])
+
+  const handleClose = useCallback(() => {
+    if (initialTheme) {
+      applyThemePreview(initialTheme)
     }
-  }, [config, saveConfig])
+    if (initialFont) {
+      applyFontPreview(initialFont)
+    }
+    setSavedFeedback(false)
+    setSaveError(null)
+    onClose()
+  }, [applyFontPreview, applyThemePreview, initialFont, initialTheme, onClose])
+
+  const handleSave = useCallback(async () => {
+    if (!config) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const response = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+      if (!response.ok) throw new Error('Failed to save settings')
+      setSavedFeedback(true)
+      setInitialConfig(config)
+      setInitialTheme(config.defaults.theme)
+      setInitialFont(fontValue)
+    } catch {
+      setSaveError('Failed to save settings.')
+    }
+    setSaving(false)
+  }, [config, fontValue])
+
+  const handleThemeChange = useCallback((themeId: string) => {
+    applyThemePreview(themeId)
+    if (config) {
+      setConfig({ ...config, defaults: { ...config.defaults, theme: themeId } })
+    }
+  }, [applyThemePreview, config])
 
   const handleFontChange = useCallback((fontValue: string) => {
-    document.documentElement.style.setProperty('--font-mono', fontValue)
-    localStorage.setItem('nexus-font-mono', fontValue)
-  }, [])
+    applyFontPreview(fontValue)
+  }, [applyFontPreview])
 
   const handleDefaultsChange = useCallback((key: string, value: string | number) => {
     if (!config) return
-    const updated = { ...config, defaults: { ...config.defaults, [key]: value } }
-    saveConfig(updated)
-  }, [config, saveConfig])
+    setConfig({ ...config, defaults: { ...config.defaults, [key]: value } })
+  }, [config])
 
   const handleAgentUpdate = useCallback((agentKey: string, field: keyof AgentDefinition, value: string | boolean) => {
     if (!config) return
     const agent = config.agents[agentKey]
     if (!agent) return
-    const updated = {
+    setConfig({
       ...config,
       agents: {
         ...config.agents,
         [agentKey]: { ...agent, [field]: value },
       },
-    }
-    saveConfig(updated)
-  }, [config, saveConfig])
+    })
+  }, [config])
 
   const handleEnvChange = useCallback((agentKey: string, envStr: string) => {
     if (!config) return
@@ -146,19 +211,23 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim()
       }
     })
-    const updated = {
+    setConfig({
       ...config,
       agents: {
         ...config.agents,
         [agentKey]: { ...agent, env },
       },
-    }
-    saveConfig(updated)
-  }, [config, saveConfig])
+    })
+  }, [config])
 
   if (!isOpen) return null
 
   const currentTheme = config?.defaults.theme || document.documentElement.getAttribute('data-theme') || 'dark-ide'
+  const dirty = Boolean(config && (
+    JSON.stringify(config) !== JSON.stringify(initialConfig) ||
+    fontValue !== (initialFont ?? fontValue) ||
+    currentTheme !== (initialTheme ?? currentTheme)
+  ))
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
     { id: 'general', label: 'General', icon: <Settings size={16} /> },
@@ -167,21 +236,32 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   ]
 
   return (
-    <div className="dialog-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="dialog-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}>
       <div className="settings-dialog" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="settings-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-            <Settings className="icon-md" style={{ color: 'var(--accent-primary)' }} />
-            <span style={{ fontSize: 'var(--font-xl)', fontWeight: 600 }}>Settings</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', minWidth: 0 }}>
+            <Settings className="icon-md" style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 'var(--font-xl)', fontWeight: 600 }}>Settings</div>
+              <div className="settings-subtitle">
+                {loading ? 'Loading settings...'
+                  : saveError ? saveError
+                    : savedFeedback ? 'Changes saved.'
+                      : dirty ? 'Unsaved changes'
+                        : 'System preferences and agent configuration'}
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-            {savedFeedback && (
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--status-running)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Check size={12} /> Saved
-              </span>
-            )}
-            <button className="pane-action-btn" onClick={onClose}>
+          <div className="settings-header-actions">
+            <button className="btn btn--secondary settings-header-btn" onClick={handleClose}>
+              Cancel
+            </button>
+            <button className="btn btn--primary settings-header-btn" onClick={handleSave} disabled={!dirty || saving || loading || !config}>
+              {saving ? <LoaderCircle size={14} className="settings-spin" /> : <Save size={14} />}
+              <span>{saving ? 'Saving...' : 'Save'}</span>
+            </button>
+            <button className="pane-action-btn" onClick={handleClose}>
               <X className="icon-md" style={{ color: 'var(--text-secondary)' }} />
             </button>
           </div>
@@ -206,17 +286,36 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
           {/* Right content */}
           <div className="settings-content">
-            {activeTab === 'general' && (
+            {loadError && (
+              <div className="settings-banner settings-banner--error">
+                <AlertCircle size={14} />
+                <span>{loadError}</span>
+              </div>
+            )}
+            {!loading && !config && !loadError && (
+              <div className="settings-empty-state">
+                <Settings className="icon-lg" />
+                <span>No settings data available.</span>
+              </div>
+            )}
+            {loading && (
+              <div className="settings-empty-state">
+                <LoaderCircle className="icon-lg settings-spin" />
+                <span>Loading settings...</span>
+              </div>
+            )}
+            {!loading && config && activeTab === 'general' && (
               <GeneralTab
                 config={config}
                 currentTheme={currentTheme}
+                currentFont={fontValue}
                 onThemeChange={handleThemeChange}
                 onFontChange={handleFontChange}
                 onDefaultsChange={handleDefaultsChange}
               />
             )}
-            {activeTab === 'shortcuts' && <ShortcutsTab />}
-            {activeTab === 'agents' && (
+            {!loading && config && activeTab === 'shortcuts' && <ShortcutsTab />}
+            {!loading && config && activeTab === 'agents' && (
               <AgentsTab
                 config={config}
                 availability={availability}
@@ -238,18 +337,18 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 function GeneralTab({
   config,
   currentTheme,
+  currentFont,
   onThemeChange,
   onFontChange,
   onDefaultsChange,
 }: {
   config: GlobalConfig | null
   currentTheme: string
+  currentFont: string
   onThemeChange: (id: string) => void
   onFontChange: (value: string) => void
   onDefaultsChange: (key: string, value: string | number) => void
 }) {
-  const savedFont = localStorage.getItem('nexus-font-mono') || FONT_OPTIONS[0].value
-
   return (
     <div className="settings-section-list">
       {/* Theme */}
@@ -288,12 +387,12 @@ function GeneralTab({
           {FONT_OPTIONS.map(font => (
             <button
               key={font.value}
-              className={`font-card ${savedFont === font.value ? 'font-card--active' : ''}`}
+              className={`font-card ${currentFont === font.value ? 'font-card--active' : ''}`}
               onClick={() => onFontChange(font.value)}
             >
               <span className="font-card__preview" style={{ fontFamily: font.value }}>Aa</span>
               <span className="font-card__name">{font.label}</span>
-              {savedFont === font.value && (
+              {currentFont === font.value && (
                 <Check size={12} style={{ color: 'var(--accent-primary)' }} />
               )}
             </button>
@@ -422,6 +521,20 @@ function AgentsTab({
   onAgentUpdate: (key: string, field: keyof AgentDefinition, value: string | boolean) => void
   onEnvChange: (key: string, envStr: string) => void
 }) {
+  const [envDrafts, setEnvDrafts] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!config) return
+    setEnvDrafts((prev) => {
+      const nextDrafts: Record<string, string> = {}
+      for (const [key, agent] of Object.entries(config.agents)) {
+        const serialized = Object.entries(agent.env || {}).map(([envKey, envValue]) => `${envKey}=${envValue}`).join('\n')
+        nextDrafts[key] = key === editingAgent && prev[key] !== undefined ? prev[key] : serialized
+      }
+      return nextDrafts
+    })
+  }, [config, editingAgent])
+
   if (!config) return null
 
   const agentKeys = Object.keys(config.agents)
@@ -530,8 +643,12 @@ function AgentsTab({
                         <label className="form-label">Environment Variables</label>
                         <textarea
                           className="form-input form-textarea"
-                          value={Object.entries(agent.env || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
-                          onChange={(e) => onEnvChange(key, e.target.value)}
+                          value={envDrafts[key] ?? ''}
+                          onChange={(e) => {
+                            const nextValue = e.target.value
+                            setEnvDrafts((prev) => ({ ...prev, [key]: nextValue }))
+                          }}
+                          onBlur={() => onEnvChange(key, envDrafts[key] ?? '')}
                           placeholder="KEY=value&#10;ANOTHER_KEY=value"
                           rows={3}
                         />

@@ -98,6 +98,9 @@ export class PtyManager {
         if (resolved) env[key] = resolved
       }
     }
+    if (agentDef?.bin === 'claude' && !env.CLAUDE_CODE_NO_FLICKER) {
+      env.CLAUDE_CODE_NO_FLICKER = '1'
+    }
 
     // Ensure PATH is set — on some systems (e.g. macOS launchd) it may be missing
     if (!env.PATH) {

@@ -183,6 +183,27 @@ export class WorktreeManager {
           hunks: hunkMap.get(file) || '',
         })
       }
+
+      const fs = await import('node:fs/promises')
+      for (const diff of diffs) {
+        if (diff.status === 'added' && !diff.hunks) {
+          try {
+            const fullPath = path.join(entry.path, diff.file)
+            const stat = await fs.stat(fullPath).catch(() => null)
+            if (!stat || !stat.isFile()) continue
+            if (stat.size > 256 * 1024) {
+              diff.hunks = `--- /dev/null\n+++ b/${diff.file}\n@@ -0,0 +0,0 @@\n Binary or large file (${Math.round(stat.size / 1024)}KB)`
+              continue
+            }
+            const content = await fs.readFile(fullPath, 'utf-8')
+            const lines = content.split('\n')
+            const plusLines = lines.map((line) => `+${line}`).join('\n')
+            diff.hunks = `--- /dev/null\n+++ b/${diff.file}\n@@ -0,0 +1,${lines.length} @@\n${plusLines}`
+          } catch {
+            // Skip unreadable files.
+          }
+        }
+      }
     } catch (err) {
       console.warn(`[WorktreeManager] getDiffs failed for ${paneId}:`, (err as Error).message)
     }

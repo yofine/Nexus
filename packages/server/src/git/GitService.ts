@@ -230,16 +230,24 @@ export class GitService {
       }
     }
 
-    // For untracked files, try to show content
+    // For untracked/new files without hunks, read file content to generate a synthetic diff.
     for (const diff of unstaged) {
       if (diff.status === 'added' && !diff.hunks) {
         try {
-          const content = await this.git.show([`:${diff.file}`]).catch(() => null)
-          if (content) {
-            diff.hunks = `--- /dev/null\n+++ b/${diff.file}\n@@ -0,0 +1 @@\n+${content}`
+          const fs = await import('node:fs/promises')
+          const fullPath = path.join(this.projectDir, diff.file)
+          const stat = await fs.stat(fullPath).catch(() => null)
+          if (!stat || !stat.isFile()) continue
+          if (stat.size > 256 * 1024) {
+            diff.hunks = `--- /dev/null\n+++ b/${diff.file}\n@@ -0,0 +0,0 @@\n Binary or large file (${Math.round(stat.size / 1024)}KB)`
+            continue
           }
+          const content = await fs.readFile(fullPath, 'utf-8')
+          const lines = content.split('\n')
+          const plusLines = lines.map((line) => `+${line}`).join('\n')
+          diff.hunks = `--- /dev/null\n+++ b/${diff.file}\n@@ -0,0 +1,${lines.length} @@\n${plusLines}`
         } catch {
-          // Skip
+          // Skip unreadable files.
         }
       }
     }

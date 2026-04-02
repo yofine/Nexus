@@ -1,6 +1,41 @@
 import { create } from 'zustand'
 import type { ConversationEvent, PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, FileActivity, FileAction, DepGraph } from '@/types'
 
+// Simple djb2 hash for review stale detection
+function hashString(s: string): number {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return h
+}
+
+// Remove reviewed entries whose hunks content has changed
+function invalidateStaleReviewed(
+  reviewed: Record<string, number>,
+  diffs: FileDiff[],
+  options?: { removeMissing?: boolean },
+): Record<string, number> {
+  const removeMissing = options?.removeMissing ?? true
+  let changed = false
+  const next = { ...reviewed }
+  for (const d of diffs) {
+    if (d.file in next && next[d.file] !== hashString(d.hunks || '')) {
+      delete next[d.file]
+      changed = true
+    }
+  }
+  // Also remove entries for files no longer in diffs
+  if (removeMissing) {
+    const diffFiles = new Set(diffs.map((d) => d.file))
+    for (const file of Object.keys(next)) {
+      if (!diffFiles.has(file)) {
+        delete next[file]
+        changed = true
+      }
+    }
+  }
+  return changed ? next : reviewed
+}
+
 export interface EditorTab {
   id: string
   type: 'file' | 'review' | 'activity' | 'replay'
@@ -52,6 +87,9 @@ interface WorkspaceStore {
   // Dependency graph
   depGraph: DepGraph | null
 
+  // Review state tracking (transient, not persisted)
+  reviewedFiles: Record<string, number>  // file path → hunks hash when marked reviewed
+
   // Tab system
   tabs: EditorTab[]
   activeTabId: string | null
@@ -77,6 +115,8 @@ interface WorkspaceStore {
   applyConversationEvent: (paneId: string, event: ConversationEvent) => void
   setDiffViewPaneId: (paneId: string | null) => void
   setDepGraph: (graph: DepGraph) => void
+  toggleFileReviewed: (file: string, hunks: string) => void
+  clearReviewedFiles: () => void
   addActivity: (paneId: string, activity: FileActivity) => void
   addFileActivity: (activity: FileActivity) => void
   openFileTab: (path: string) => void
@@ -104,6 +144,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   activities: [],
   paneCurrentFile: {},
   depGraph: null,
+  reviewedFiles: {},
   tabs: [
     { id: 'tab:activity', type: 'activity', label: 'Activity', pinned: true },
     { id: 'review:workspace', type: 'review', label: 'Review', pinned: true },
@@ -195,18 +236,31 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   setFileTree: (fileTree) => set({ fileTree }),
 
-  setGitDiffs: (gitDiffs) => set({ gitDiffs }),
+  setGitDiffs: (gitDiffs) =>
+    set((state) => {
+      // Invalidate reviewed files whose hunks have changed
+      const reviewed = invalidateStaleReviewed(state.reviewedFiles, gitDiffs)
+      return { gitDiffs, reviewedFiles: reviewed }
+    }),
 
   setGitStagedDiffs: (gitStagedDiffs) => set({ gitStagedDiffs }),
 
-  setGitAllDiffs: (gitDiffs, gitStagedDiffs) => set({ gitDiffs, gitStagedDiffs }),
+  setGitAllDiffs: (gitDiffs, gitStagedDiffs) =>
+    set((state) => {
+      const reviewed = invalidateStaleReviewed(state.reviewedFiles, [...gitDiffs, ...gitStagedDiffs])
+      return { gitDiffs, gitStagedDiffs, reviewedFiles: reviewed }
+    }),
 
   setGitBranchInfo: (gitBranchInfo) => set({ gitBranchInfo }),
 
   setPaneDiffs: (paneId, diffs) =>
-    set((state) => ({
-      paneDiffs: { ...state.paneDiffs, [paneId]: diffs },
-    })),
+    set((state) => {
+      const reviewed = invalidateStaleReviewed(state.reviewedFiles, diffs, { removeMissing: false })
+      return {
+        paneDiffs: { ...state.paneDiffs, [paneId]: diffs },
+        reviewedFiles: reviewed,
+      }
+    }),
 
   removePaneDiffs: (paneId) =>
     set((state) => {
@@ -232,6 +286,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     set((state) => {
       const current = state.conversationByPane[paneId] || []
 
+      // Append text to the last message of the same role
       if (event.type === 'message' && event.append && current.length > 0) {
         const last = current[current.length - 1]
         if (last?.type === 'message' && last.role === event.role) {
@@ -240,6 +295,28 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
             ...last,
             messageId: event.messageId || last.messageId,
             text: last.text + event.text,
+          }
+          return {
+            conversationByPane: { ...state.conversationByPane, [paneId]: next },
+          }
+        }
+      }
+
+      // Update existing tool event by toolCallId
+      if (event.type === 'tool') {
+        const existingIdx = current.findIndex(
+          (e) => e.type === 'tool' && e.toolCallId === event.toolCallId,
+        )
+        if (existingIdx >= 0) {
+          const existing = current[existingIdx] as typeof event
+          const next = current.slice()
+          next[existingIdx] = {
+            ...existing,
+            status: event.status,
+            title: event.title || existing.title,
+            text: event.text
+              ? (existing.text ? existing.text + event.text : event.text)
+              : existing.text,
           }
           return {
             conversationByPane: { ...state.conversationByPane, [paneId]: next },
@@ -258,6 +335,19 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   setDiffViewPaneId: (diffViewPaneId) => set({ diffViewPaneId }),
 
   setDepGraph: (depGraph) => set({ depGraph }),
+
+  toggleFileReviewed: (file, hunks) =>
+    set((state) => {
+      const reviewed = { ...state.reviewedFiles }
+      if (file in reviewed) {
+        delete reviewed[file]
+      } else {
+        reviewed[file] = hashString(hunks || '')
+      }
+      return { reviewedFiles: reviewed }
+    }),
+
+  clearReviewedFiles: () => set({ reviewedFiles: {} }),
 
   addActivity: (paneId, activity) =>
     set((state) => {
