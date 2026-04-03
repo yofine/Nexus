@@ -1,6 +1,6 @@
 {
   "name": "mexus-cli",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "description": "Local web console for managing multiple CLI AI Agent instances in parallel",
   "type": "module",
   "bin": {
@@ -43,6 +43,13 @@
       "node-pty"
     ]
   },
-  "keywords": ["ai", "agent", "claude", "terminal", "pty", "manager"],
+  "keywords": [
+    "ai",
+    "agent",
+    "claude",
+    "terminal",
+    "pty",
+    "manager"
+  ],
   "license": "MIT"
 }
