@@ -10,6 +10,7 @@ import {
 import { AgentIcon } from './AgentIcon'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ClientEvent } from '@/types'
+import { createRestartPaneEvent } from '@/stores/paneStoreUtils'
 
 interface CommandPaletteProps {
   open: boolean
@@ -138,7 +139,7 @@ export function CommandPalette({ open, onClose, send, onAddPane }: CommandPalett
                 <Item
                   onSelect={() => runAndClose(() => {
                     const pane = panes.find(p => p.id === activePaneId)
-                    if (pane) send({ type: 'pane.restart', paneId: activePaneId, mode: pane.restore })
+                    if (pane) send(createRestartPaneEvent(activePaneId))
                   })}
                   icon={<RotateCcw size={14} />}
                 >

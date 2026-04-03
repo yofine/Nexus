@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ConversationEvent, PaneState, PaneMeta, PaneStatus, FileNode, FileDiff, FileActivity, FileAction, DepGraph } from '@/types'
+import { upsertPaneById } from './paneStoreUtils'
 
 // Simple djb2 hash for review stale detection
 function hashString(s: string): number {
@@ -173,8 +174,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   addPane: (pane) =>
     set((state) => {
       if (pane.agent === '__shell__') return state
+      const panes = upsertPaneById(state.panes, pane)
       return {
-        panes: [...state.panes, pane],
+        panes,
         conversationByPane: {
           ...state.conversationByPane,
           [pane.id]: state.conversationByPane[pane.id] || [],

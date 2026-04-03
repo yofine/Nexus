@@ -1,4 +1,4 @@
-import { Plus, Zap, ClipboardList, Settings, History, StickyNote } from 'lucide-react'
+import { Plus, Settings, History, StickyNote } from 'lucide-react'
 
 interface SidebarProps {
   onAddPane: () => void
@@ -68,11 +68,6 @@ export function Sidebar({ onAddPane, onOpenSettings, onOpenReplay, onOpenNotes }
         onClick={onAddPane}
       />
       <SidebarButton
-        icon={<Zap className="sidebar-icon sidebar-icon--disabled" />}
-        title="Task Dispatch (coming soon)"
-        disabled
-      />
-      <SidebarButton
         icon={<History className="sidebar-icon" />}
         title="Replay History"
         onClick={onOpenReplay}
@@ -81,11 +76,6 @@ export function Sidebar({ onAddPane, onOpenSettings, onOpenReplay, onOpenNotes }
         icon={<StickyNote className="sidebar-icon" />}
         title="Notes"
         onClick={onOpenNotes}
-      />
-      <SidebarButton
-        icon={<ClipboardList className="sidebar-icon sidebar-icon--disabled" />}
-        title="Templates (coming soon)"
-        disabled
       />
 
       <div style={{ flex: 1 }} />

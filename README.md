@@ -7,7 +7,7 @@ A local web console for managing multiple CLI AI Agent instances in parallel fro
 ### 🖥️ Multi-Agent Parallel Management
 - Supports multiple agents: Claude Code, OpenCode, Aider, Codex, Gemini
 - Each agent runs in its own collapsible terminal pane
-- Create, close, and restart agent processes
+- Create, close, restart, and resume agent processes
 - Real-time status indicators (running / waiting / idle / stopped / error)
 - Floating bottom shell terminal, always accessible
 
@@ -41,7 +41,7 @@ A local web console for managing multiple CLI AI Agent instances in parallel fro
 ### 📝 Configuration
 - YAML-driven config at global (`~/.nexus/config.yaml`) and project level
 - Per-agent working directory and task description
-- Session restore modes: continue (`--continue`) / restart / manual
+- Session start modes: new session or resume a selected prior session
 
 ## Installation & Usage
 

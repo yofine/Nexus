@@ -19,6 +19,7 @@ import {
   getTerminalDimensions,
 } from '@/stores/terminalRegistry'
 import type { PaneState, ClientEvent } from '@/types'
+import { canResumePane, createRestartPaneEvent, getResumeMode } from '@/stores/paneStoreUtils'
 
 interface AgentPaneProps {
   pane: PaneState
@@ -101,17 +102,14 @@ export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, 
 
   const handleRestart = (e: React.MouseEvent) => {
     e.stopPropagation()
-    send({ type: 'pane.restart', paneId: pane.id, mode: 'restart' })
+    send(createRestartPaneEvent(pane.id))
   }
 
   const handleResume = (e: React.MouseEvent) => {
     e.stopPropagation()
     const sessionId = pane.meta.sessionId || pane.sessionId
-    if (sessionId) {
-      send({ type: 'pane.restart', paneId: pane.id, mode: 'resume', sessionId })
-    } else {
-      send({ type: 'pane.restart', paneId: pane.id, mode: 'continue' })
-    }
+    if (!sessionId) return
+    send({ type: 'pane.restart', paneId: pane.id, mode: getResumeMode(pane), sessionId })
   }
 
   const handleMerge = (e: React.MouseEvent) => {
@@ -119,9 +117,7 @@ export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, 
     send({ type: 'pane.merge', paneId: pane.id })
   }
 
-  const hasSessionId = !!(pane.meta.sessionId || pane.sessionId)
-  const isStopped = pane.status === 'stopped' || pane.status === 'error'
-
+  const hasSessionId = canResumePane(pane)
   return (
     <div
       style={{
@@ -240,12 +236,12 @@ export const AgentPane = memo(function AgentPane({ pane, paneIndex, isExpanded, 
               </button>
             )}
             {/* Resume button — shown when pane is stopped/error or has a session ID */}
-            {(isStopped || hasSessionId) && (
+            {hasSessionId && (
               <button
                 onClick={handleResume}
                 title={hasSessionId
                   ? `Resume session ${(pane.meta.sessionId || pane.sessionId || '').slice(0, 12)}`
-                  : 'Resume (--continue)'}
+                  : 'Resume session'}
                 className="pane-action-btn"
                 style={{
                   display: 'flex',

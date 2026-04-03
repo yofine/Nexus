@@ -95,18 +95,19 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
     if (restore === 'resume' && !selectedSessionId) return
 
     const estimatedDims = estimateTerminalDimensions()
+    const submitRestoreMode: RestoreMode = restore === 'resume' ? 'resume' : 'restart'
 
     send({
       type: 'pane.create',
       config: {
         name: name.trim(),
         agent,
-        workdir: restore === 'resume' ? undefined : (workdir.trim() || undefined),
-        task: restore === 'resume' ? undefined : (task.trim() || undefined),
-        restore,
+        workdir: submitRestoreMode === 'resume' ? undefined : (workdir.trim() || undefined),
+        task: submitRestoreMode === 'resume' ? undefined : (task.trim() || undefined),
+        restore: submitRestoreMode,
         isolation,
         yolo: yolo || undefined,
-        sessionId: restore === 'resume' ? (selectedSessionId || undefined) : undefined,
+        sessionId: submitRestoreMode === 'resume' ? (selectedSessionId || undefined) : undefined,
         ...estimatedDims,
       },
     })
@@ -183,7 +184,10 @@ export function AddPaneDialog({ isOpen, onClose, send }: AddPaneDialogProps) {
             <div className="apd-mode-toggle">
               <button
                 type="button"
-                onClick={() => setRestore('restart')}
+                onClick={() => {
+                  setRestore('restart')
+                  setSelectedSessionId(null)
+                }}
                 className={`apd-mode-btn${!isResume ? ' apd-mode-btn--active' : ''}`}
               >
                 <Plus size={14} />
