@@ -3,62 +3,66 @@ import { useCallback, useRef } from 'react'
 interface ResizeHandleProps {
   onResize: (delta: number) => void
   onResizeEnd?: () => void
+  onCycleWidth?: () => void
+  onResetWidth?: () => void
 }
 
-export function ResizeHandle({ onResize, onResizeEnd }: ResizeHandleProps) {
+export function ResizeHandle({ onResize, onResizeEnd, onCycleWidth, onResetWidth }: ResizeHandleProps) {
   const dragging = useRef(false)
   const lastX = useRef(0)
+  const moved = useRef(false)
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
     dragging.current = true
     lastX.current = e.clientX
+    moved.current = false
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    e.currentTarget.setPointerCapture?.(e.pointerId)
 
-    const handleMouseMove = (ev: MouseEvent) => {
+    const handlePointerMove = (ev: PointerEvent) => {
       if (!dragging.current) return
       const delta = ev.clientX - lastX.current
+      if (Math.abs(delta) > 2) {
+        moved.current = true
+      }
       lastX.current = ev.clientX
       onResize(delta)
     }
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       dragging.current = false
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('pointerup', handlePointerUp)
       onResizeEnd?.()
     }
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('pointerup', handlePointerUp)
   }, [onResize, onResizeEnd])
 
   return (
     <div
       data-resize-handle
-      onMouseDown={handleMouseDown}
+      className="resize-handle"
+      onPointerDown={handlePointerDown}
+      onClick={() => {
+        if (!moved.current) onCycleWidth?.()
+      }}
+      onDoubleClick={() => onResetWidth?.()}
       style={{
-        width: 5,
         cursor: 'col-resize',
         flexShrink: 0,
         background: 'transparent',
         position: 'relative',
-        zIndex: 10,
+        zIndex: 20,
+        touchAction: 'none',
       }}
     >
-      {/* Visible line */}
-      <div style={{
-        position: 'absolute',
-        left: 2,
-        top: 0,
-        bottom: 0,
-        width: 1,
-        background: 'var(--border-subtle)',
-        transition: 'background 0.15s',
-      }} />
+      <div className="resize-handle__line" />
     </div>
   )
 }

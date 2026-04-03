@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { GitBranch, Share2, Zap, History, Plus, Loader2, X, FolderOpen, MessageSquare } from 'lucide-react'
 import { AgentIcon, getAgentDisplayName } from './AgentIcon'
 import type { ClientEvent, AgentType, RestoreMode, IsolationMode, AgentAvailability, DiscoveredSession } from '@/types'
+import { loadLayoutPreferences } from '@/lib/layoutPreferences'
 
 const AGENT_TYPES: AgentType[] = ['claudecode', 'codex', 'opencode', 'kimi-cli', 'qodercli']
 
@@ -19,11 +20,8 @@ function estimateTerminalDimensions(): { cols: number; rows: number } {
   }
   let containerWidth = 480 - 18
   try {
-    const raw = localStorage.getItem('nexus-panel-widths')
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed.agents) containerWidth = parsed.agents - XTERM_PADDING
-    }
+    const prefs = loadLayoutPreferences()
+    containerWidth = prefs.widthsByMode[prefs.mode].agents - XTERM_PADDING
   } catch { /* ignore */ }
   const termHeight = Math.min(800, Math.max(300, window.innerHeight * 0.6)) - 40
   const cols = Math.max(40, Math.floor(containerWidth / charWidth))

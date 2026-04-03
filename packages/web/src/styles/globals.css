@@ -341,10 +341,33 @@ body {
 }
 
 /* ── Resize Handle ── */
+.resize-handle {
+  width: 8px;
+  margin: 0 -2px;
+}
+
+.resize-handle__line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border-subtle);
+  transition: background 0.15s, width 0.15s;
+}
+
 [data-resize-handle]:hover > div,
 [data-resize-handle]:active > div {
   background: var(--accent-primary) !important;
   width: 2px !important;
+}
+
+@media (pointer: coarse) {
+  .resize-handle {
+    width: 18px;
+    margin: 0 -5px;
+  }
 }
 
 /* ── cmdk Command Palette ── */
@@ -494,11 +517,32 @@ body {
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
   transition: background 0.15s;
 }
 
 .pane-action-btn:hover {
   background: var(--bg-overlay);
+}
+
+.terminal-chip {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--font-xs);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.terminal-chip:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
 }
 
 /* ── Dialog ── */
@@ -1049,6 +1093,7 @@ body {
   border-radius: var(--radius-lg);
   width: 720px;
   max-width: calc(100vw - var(--space-2xl) * 2);
+  height: min(760px, calc(100vh - var(--space-2xl) * 4));
   max-height: calc(100vh - var(--space-2xl) * 4);
   display: flex;
   flex-direction: column;
@@ -1153,10 +1198,12 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-md);
+  min-height: 44px;
   padding: var(--space-md) var(--space-lg);
   border: none;
   background: none;
   border-radius: var(--radius-md);
+  box-sizing: border-box;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: var(--font-sm);
@@ -1471,6 +1518,7 @@ body {
 @media (max-width: 860px) {
   .settings-dialog {
     width: min(100vw - 24px, 720px);
+    height: calc(100vh - 24px);
     max-height: calc(100vh - 24px);
   }
 
@@ -1500,6 +1548,7 @@ body {
 
   .settings-nav-item {
     width: auto;
+    min-height: 44px;
     white-space: nowrap;
   }
 

@@ -351,7 +351,6 @@ function GeneralTab({
 }) {
   return (
     <div className="settings-section-list">
-      {/* Theme */}
       <section className="settings-section">
         <div className="settings-section-header">
           <Palette className="icon-sm" style={{ color: 'var(--accent-primary)' }} />

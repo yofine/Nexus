@@ -1,4 +1,4 @@
-import { X, File, GitBranch, Shield, Activity, History } from 'lucide-react'
+import { X, File, GitBranch, Shield, Activity, History, Eye, EyeOff, RotateCcw } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { EditorTab } from '@/stores/workspaceStore'
 import { FileViewer } from './FileViewer'
@@ -9,6 +9,9 @@ import type { ClientEvent } from '@/types'
 
 interface EditorTabsProps {
   send: (event: ClientEvent) => void
+  isMaximized?: boolean
+  onToggleMaximize?: () => void
+  onResetLayout?: () => void
 }
 
 function TabButton({ tab, isActive, onActivate, onClose }: {
@@ -78,7 +81,7 @@ function TabButton({ tab, isActive, onActivate, onClose }: {
   )
 }
 
-export function EditorTabs({ send }: EditorTabsProps) {
+export function EditorTabs({ send, isMaximized = false, onToggleMaximize, onResetLayout }: EditorTabsProps) {
   const { tabs, activeTabId, setActiveTab, closeTab } = useWorkspaceStore()
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
@@ -95,18 +98,40 @@ export function EditorTabs({ send }: EditorTabsProps) {
           flexShrink: 0,
         }}
       >
-        {tabs.map((tab) => (
-          <TabButton
-            key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            onActivate={() => setActiveTab(tab.id)}
-            onClose={tab.pinned ? undefined : (e) => {
-              e.stopPropagation()
-              closeTab(tab.id)
-            }}
-          />
-        ))}
+        <div style={{ display: 'flex', overflow: 'auto', minWidth: 0, flex: 1 }}>
+          {tabs.map((tab) => (
+            <TabButton
+              key={tab.id}
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              onActivate={() => setActiveTab(tab.id)}
+              onClose={tab.pinned ? undefined : (e) => {
+                e.stopPropagation()
+                closeTab(tab.id)
+              }}
+            />
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px', flexShrink: 0 }}>
+          {onResetLayout && (
+            <button className="pane-action-btn" title="Reset layout" onClick={onResetLayout}>
+              <RotateCcw className="icon-xs" style={{ color: 'var(--text-secondary)' }} />
+            </button>
+          )}
+          {onToggleMaximize && (
+            <button
+              className="pane-action-btn"
+              title={isMaximized ? 'Exit Observer Mode' : 'Enter Observer Mode'}
+              onClick={onToggleMaximize}
+            >
+              {isMaximized ? (
+                <EyeOff className="icon-xs" style={{ color: 'var(--accent-primary)' }} />
+              ) : (
+                <Eye className="icon-xs" style={{ color: 'var(--text-secondary)' }} />
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
