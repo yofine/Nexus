@@ -47,7 +47,7 @@ A local web console for managing multiple CLI AI Agent instances in parallel fro
 
 ```bash
 # Install globally
-npm install -g nexus-console
+npm install -g mexus-cli
 
 # Start in the current directory
 nexus

@@ -1,6 +1,157 @@
 import path from 'node:path'
 import fs from 'node:fs'
+import { spawn } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { startServer } from './index.ts'
+
+type RunCommandResult = {
+  exitCode: number
+  stdout: string
+  stderr: string
+}
+
+type MaybeSelfUpdateOptions = {
+  args: string[]
+  env: NodeJS.ProcessEnv
+  packageName: string
+  currentVersion: string
+  entryFile: string
+  execPath: string
+  runCommand?: (command: string, args: string[]) => Promise<RunCommandResult>
+  spawnUpdatedCli?: (args: string[], env: NodeJS.ProcessEnv) => Promise<number>
+}
+
+type SelfUpdateResult = {
+  action: 'continued' | 'restarted'
+}
+
+const SELF_UPDATED_ENV = 'NEXUS_SELF_UPDATED'
+const ROOT_PACKAGE_JSON = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../package.json')
+
+function loadPublishedPackageMeta(): { name: string; version: string } {
+  const raw = fs.readFileSync(ROOT_PACKAGE_JSON, 'utf-8')
+  const pkg = JSON.parse(raw) as { name?: string; version?: string }
+  return {
+    name: pkg.name || 'nexus-console',
+    version: pkg.version || '0.0.0',
+  }
+}
+
+async function runCommand(command: string, args: string[]): Promise<RunCommandResult> {
+  return await new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    child.stdout?.on('data', (chunk) => {
+      stdout += String(chunk)
+    })
+    child.stderr?.on('data', (chunk) => {
+      stderr += String(chunk)
+    })
+    child.on('error', (error) => {
+      resolve({ exitCode: 1, stdout, stderr: error.message })
+    })
+    child.on('close', (exitCode) => {
+      resolve({ exitCode: exitCode ?? 1, stdout, stderr })
+    })
+  })
+}
+
+async function spawnUpdatedCli(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+  return await new Promise((resolve) => {
+    const child = spawn('nexus', args, {
+      stdio: 'inherit',
+      env,
+    })
+
+    child.on('error', () => resolve(1))
+    child.on('close', (exitCode) => resolve(exitCode ?? 1))
+  })
+}
+
+function parseLatestVersion(stdout: string): string | null {
+  const trimmed = stdout.trim()
+  if (!trimmed) return null
+
+  try {
+    const parsed = JSON.parse(trimmed) as string
+    return typeof parsed === 'string' ? parsed : null
+  } catch {
+    return trimmed.replace(/^"+|"+$/g, '')
+  }
+}
+
+export function compareVersions(current: string, latest: string): number {
+  const currentParts = current.split('.').map((part) => parseInt(part, 10) || 0)
+  const latestParts = latest.split('.').map((part) => parseInt(part, 10) || 0)
+  const length = Math.max(currentParts.length, latestParts.length)
+
+  for (let index = 0; index < length; index++) {
+    const left = currentParts[index] ?? 0
+    const right = latestParts[index] ?? 0
+    if (left !== right) return left - right
+  }
+
+  return 0
+}
+
+export function shouldSkipSelfUpdate(input: {
+  alreadyUpdated: boolean
+  packageName: string
+  entryFile: string
+  execPath: string
+}): boolean {
+  if (input.alreadyUpdated) return true
+  if (input.entryFile.endsWith('.ts')) return true
+  if (!input.packageName) return true
+  if (input.execPath.toLowerCase().includes('tsx')) return true
+  return !input.entryFile.includes(`/node_modules/${input.packageName}/`)
+}
+
+export async function maybeSelfUpdate(options: MaybeSelfUpdateOptions): Promise<SelfUpdateResult> {
+  if (shouldSkipSelfUpdate({
+    alreadyUpdated: options.env[SELF_UPDATED_ENV] === '1',
+    packageName: options.packageName,
+    entryFile: options.entryFile,
+    execPath: options.execPath,
+  })) {
+    return { action: 'continued' }
+  }
+
+  const execRunCommand = options.runCommand ?? runCommand
+  const execSpawnUpdatedCli = options.spawnUpdatedCli ?? spawnUpdatedCli
+
+  const latestResult = await execRunCommand('npm', ['view', options.packageName, 'version', '--json'])
+  if (latestResult.exitCode !== 0) {
+    return { action: 'continued' }
+  }
+
+  const latestVersion = parseLatestVersion(latestResult.stdout)
+  if (!latestVersion || compareVersions(options.currentVersion, latestVersion) >= 0) {
+    return { action: 'continued' }
+  }
+
+  console.log(`[nexus] Updating ${options.packageName} from ${options.currentVersion} to ${latestVersion}`)
+  const installResult = await execRunCommand('npm', ['install', '-g', `${options.packageName}@latest`])
+  if (installResult.exitCode !== 0) {
+    console.warn(`[nexus] Self-update failed: ${installResult.stderr || 'npm install exited non-zero'}`)
+    return { action: 'continued' }
+  }
+
+  const restartCode = await execSpawnUpdatedCli(options.args, {
+    ...options.env,
+    [SELF_UPDATED_ENV]: '1',
+  })
+  if (restartCode !== 0) {
+    console.warn(`[nexus] Restart after self-update failed with exit code ${restartCode}`)
+  }
+  return { action: 'restarted' }
+}
 
 // Check Node.js version — node-pty requires Node 22+
 const nodeVersion = parseInt(process.versions.node.split('.')[0], 10)
@@ -98,6 +249,21 @@ const COMMANDS = new Set(['start', 'init', 'status', 'stop', 'help'])
 
 async function main() {
   const args = process.argv.slice(2)
+  const packageMeta = loadPublishedPackageMeta()
+
+  try {
+    const updateResult = await maybeSelfUpdate({
+      args,
+      env: process.env,
+      packageName: packageMeta.name,
+      currentVersion: packageMeta.version,
+      entryFile: fileURLToPath(import.meta.url),
+      execPath: process.execPath,
+    })
+    if (updateResult.action === 'restarted') return
+  } catch (error) {
+    console.warn('[nexus] Self-update skipped:', (error as Error).message)
+  }
 
   // Parse command and directory argument
   // Support: nexus <dir>, nexus <cmd> <dir>, nexus <cmd>
@@ -196,7 +362,13 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err)
-  process.exit(1)
-})
+const isEntrypoint = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+  : false
+
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error('Fatal error:', err)
+    process.exit(1)
+  })
+}
