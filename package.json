@@ -1,6 +1,6 @@
 {
   "name": "mexus-cli",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "description": "Local web console for managing multiple CLI AI Agent instances in parallel",
   "type": "module",
   "bin": {
@@ -19,7 +19,10 @@
     "build": "pnpm run build:web && pnpm run build:server",
     "start": "NEXUS_PROJECT_DIR=$PWD node packages/server/dist/cli.mjs",
     "postinstall": "node scripts/postinstall.mjs",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
   },
   "engines": {
     "node": ">=22"

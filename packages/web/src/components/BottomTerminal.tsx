@@ -17,7 +17,7 @@ interface BottomTerminalProps {
 }
 
 const PANE_ID = '__shell__'
-const STATIC_COMMANDS = ['pwd', 'ls', 'git status', 'git diff --stat']
+const STATIC_COMMANDS = ['pwd', 'ls', 'git status', 'git diff --stat', 'git push']
 const SCRIPT_KEYS = ['dev', 'build', 'test', 'lint']
 
 export function BottomTerminal({ send }: BottomTerminalProps) {
@@ -254,9 +254,6 @@ export function BottomTerminal({ send }: BottomTerminalProps) {
             {command}
           </button>
         ))}
-        <button className="terminal-chip" onClick={() => send({ type: 'terminal.input', paneId: PANE_ID, data: 'clear\r' })}>
-          clear
-        </button>
         <button className="terminal-chip" onClick={() => send({ type: 'terminal.input', paneId: PANE_ID, data: '--help' })}>
           --help
         </button>
