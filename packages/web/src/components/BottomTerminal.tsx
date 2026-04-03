@@ -11,6 +11,7 @@ import {
   saveModeTerminalHeight,
   type LayoutMode,
 } from '@/lib/layoutPreferences'
+import { getProjectCommands } from '@/lib/terminalCommands'
 
 interface BottomTerminalProps {
   send: (event: ClientEvent) => void
@@ -18,7 +19,6 @@ interface BottomTerminalProps {
 
 const PANE_ID = '__shell__'
 const STATIC_COMMANDS = ['pwd', 'ls', 'git status', 'git diff --stat', 'git push']
-const SCRIPT_KEYS = ['dev', 'build', 'test', 'lint']
 
 export function BottomTerminal({ send }: BottomTerminalProps) {
   const initialPrefs = loadLayoutPreferences()
@@ -52,9 +52,7 @@ export function BottomTerminal({ send }: BottomTerminalProps) {
       .then((data: { content: string } | null) => {
         if (!data?.content) return
         const parsed = JSON.parse(data.content) as { scripts?: Record<string, string> }
-        const scripts = parsed.scripts || {}
-        const commands = SCRIPT_KEYS.filter((key) => key in scripts).map((key) => `pnpm ${key}`)
-        setProjectCommands(commands)
+        setProjectCommands(getProjectCommands(parsed.scripts || {}))
       })
       .catch(() => setProjectCommands([]))
   }, [])
