@@ -4,6 +4,7 @@
   "description": "Local web console for managing multiple CLI AI Agent instances in parallel",
   "type": "module",
   "bin": {
+    "mexus": "./packages/server/dist/cli.mjs",
     "nexus": "./packages/server/dist/cli.mjs"
   },
   "files": [

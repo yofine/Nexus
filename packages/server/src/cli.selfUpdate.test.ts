@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   compareVersions,
+  getCliCommandName,
   launchBackgroundSelfUpdate,
   maybeStartBackgroundSelfUpdate,
   runSelfUpdateCommand,
@@ -13,6 +14,17 @@ describe('compareVersions', () => {
     expect(compareVersions('2.0.0', '2.0.1')).toBeLessThan(0)
     expect(compareVersions('2.0.0', '2.0.0')).toBe(0)
     expect(compareVersions('2.0.1', '2.0.0')).toBeGreaterThan(0)
+  })
+})
+
+describe('getCliCommandName', () => {
+  it('uses mexus as the default command name', () => {
+    expect(getCliCommandName(undefined)).toBe('mexus')
+  })
+
+  it('preserves known command aliases from the invoked binary name', () => {
+    expect(getCliCommandName('/usr/local/bin/mexus')).toBe('mexus')
+    expect(getCliCommandName('/usr/local/bin/nexus')).toBe('nexus')
   })
 })
 

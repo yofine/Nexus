@@ -16,25 +16,25 @@ Instead of opening several terminal windows for different coding agents, you can
 
 ```bash
 # Requires Node.js 22+
-npm install -g nexus-console
+npm install -g mexus-cli
 
 # Start in the current directory
-nexus
+mexus
 
 # Start with a specific project path
-nexus ~/projects/my-app
+mexus ~/projects/my-app
 
 # Initialize project config
-nexus init ~/projects/my-app
+mexus init ~/projects/my-app
 
 # Check workspace status
-nexus status
+mexus status
 
 # Stop the server
-nexus stop
+mexus stop
 
 # Use a custom port
-NEXUS_PORT=8080 nexus
+NEXUS_PORT=8080 mexus
 ```
 
 On first launch, Nexus automatically opens `http://localhost:7700` in your browser.
@@ -62,16 +62,16 @@ When running from source, Nexus also opens `http://localhost:7700` on first laun
 
 ```bash
 # Current directory
-nexus
+mexus
 
 # Specific project directory
-nexus ~/projects/my-app
+mexus ~/projects/my-app
 
 # Initialize project config
-nexus init ~/projects/my-app
+mexus init ~/projects/my-app
 
 # Custom port
-NEXUS_PORT=8080 nexus
+NEXUS_PORT=8080 mexus
 ```
 
 ---

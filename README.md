@@ -50,22 +50,22 @@ A local web console for managing multiple CLI AI Agent instances in parallel fro
 npm install -g mexus-cli
 
 # Start in the current directory
-nexus
+mexus
 
 # Start with a specific project path
-nexus ~/projects/my-app
+mexus ~/projects/my-app
 
 # Initialize project config
-nexus init ~/projects/my-app
+mexus init ~/projects/my-app
 
 # Check workspace status
-nexus status
+mexus status
 
 # Stop the server
-nexus stop
+mexus stop
 
 # Custom port
-NEXUS_PORT=8080 nexus
+NEXUS_PORT=8080 mexus
 ```
 
 ### Development

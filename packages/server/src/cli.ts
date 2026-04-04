@@ -60,6 +60,11 @@ function loadPublishedPackageMeta(): { name: string; version: string } {
   }
 }
 
+export function getCliCommandName(invokedPath?: string): 'mexus' | 'nexus' {
+  const binaryName = invokedPath ? path.basename(invokedPath).toLowerCase() : ''
+  return binaryName === 'nexus' ? 'nexus' : 'mexus'
+}
+
 async function runCommand(command: string, args: string[]): Promise<RunCommandResult> {
   return await new Promise((resolve) => {
     const child = spawn(command, args, {
@@ -241,9 +246,9 @@ delete process.env.CLAUDE_CODE_ENTRYPOINT
 
 const DEFAULT_PORT = 7700
 
-function printUsage() {
+function printUsage(commandName: string) {
   console.log(`
-  Usage: nexus [command] [directory]
+  Usage: ${commandName} [command] [directory]
 
   Commands:
     start [dir]    Start the Nexus server (default)
@@ -258,10 +263,10 @@ function printUsage() {
     NEXUS_PORT     Server port (default: ${DEFAULT_PORT})
 
   Examples:
-    nexus                        # Start in current directory
-    nexus ~/projects/my-app      # Start with a specific project
-    nexus start ~/projects/app   # Explicit start command
-    nexus init .                 # Initialize config in cwd
+    ${commandName}                        # Start in current directory
+    ${commandName} ~/projects/my-app      # Start with a specific project
+    ${commandName} start ~/projects/app   # Explicit start command
+    ${commandName} init .                 # Initialize config in cwd
 `.trimEnd())
 }
 
@@ -323,6 +328,7 @@ const COMMANDS = new Set(['start', 'init', 'status', 'stop', 'help', SELF_UPDATE
 async function main() {
   const args = process.argv.slice(2)
   const packageMeta = loadPublishedPackageMeta()
+  const commandName = getCliCommandName(process.argv[1])
 
   // Parse command and directory argument
   // Support: nexus <dir>, nexus <cmd> <dir>, nexus <cmd>
@@ -343,7 +349,7 @@ async function main() {
   }
 
   if (command === 'help') {
-    printUsage()
+    printUsage(commandName)
     return
   }
 
@@ -433,7 +439,7 @@ async function main() {
 
     default:
       console.error(`Unknown command: ${command}`)
-      printUsage()
+      printUsage(commandName)
       process.exit(1)
   }
 }
