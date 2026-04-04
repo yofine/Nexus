@@ -2,6 +2,11 @@
 
 A local web console for managing multiple CLI AI Agent instances in parallel from a single browser interface.
 
+
+https://github.com/user-attachments/assets/1bde703f-dda8-4a83-9421-40e212c6aba1
+
+
+
 ## Features
 
 ### 🖥️ Multi-Agent Parallel Management
@@ -112,3 +117,9 @@ CLI Agent Processes (node-pty)
 ## License
 
 MIT
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/image?repos=yofine/Nexus&type=date&legend=top-left)](https://www.star-history.com/?repos=yofine%2FNexus&type=date&legend=top-left)
+
+<br/>
